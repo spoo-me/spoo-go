@@ -4,7 +4,10 @@
 // The package covers the v1 HTTP API: shortening, link management,
 // claiming, bulk operations, stats, exports, public previews, the emoji
 // alias policy, and the connected-apps device flow. It has no
-// dependencies outside the standard library.
+// dependencies outside the standard library. Endpoints without a typed
+// method yet are reachable through the raw [Client.Get], [Client.Post],
+// [Client.Put], [Client.Patch] and [Client.Delete] passthroughs, which
+// reuse the client's auth, retries and error mapping.
 //
 // # Quickstart
 //

@@ -143,8 +143,10 @@ public, err = client.PublicStats(ctx, "secret", spoo.PublicStatsQuery{
 Without explicit dates the API returns only the last 7 days; request up to
 `spoo.MaxRangeDays` (90) explicitly for more.
 
-Exports stream and carry the server-suggested filename. The csv format
-arrives as a ZIP archive with one CSV per dimension:
+Exports stream and carry the server-suggested filename, reduced to a bare
+name so it is safe to pass to `os.Create` even against a self-hosted or
+untrusted deployment. The csv format arrives as a ZIP archive with one CSV
+per dimension:
 
 ```go
 file, err := client.Export(ctx, spoo.StatsQuery{}, "xlsx")
@@ -180,6 +182,7 @@ Common branches have predicates and sentinels:
 | --- | --- |
 | `spoo.IsNotFound(err)` | 404: no such resource, or not yours |
 | `spoo.IsRateLimited(err)` | 429: budget exhausted even after retries |
+| `errors.Is(err, spoo.ErrMissingLongURL)` | `Shorten` was called with an empty `LongURL`; nothing was sent |
 | `errors.Is(err, spoo.ErrSessionExpired)` | the refresh token no longer works; log in again |
 | `errors.Is(err, spoo.ErrLinkPasswordProtected)` | the link's stats need the link password |
 | `spoo.IsBlocked(err)` | 451: the link was taken down by the safety pipeline |
@@ -237,6 +240,16 @@ client := spoo.NewClient(
 process, implement the two-method `TokenSource` interface over your keyring,
 file, or database, and rotated tokens persist through it.
 
+## Scope
+
+The SDK covers the v1 data plane end to end: shortening, link management,
+claiming, bulk operations, stats, exports, public stats and previews, the
+emoji alias policy, identity (`Me`), and the Sign in with Spoo device flow.
+Deliberately out of scope: API key management, health checks, the contact
+endpoint, profile management, and all legacy v0 routes. Anything the API
+grows before the SDK does is reachable through the raw request methods
+below.
+
 ## API coverage
 
 | Method | Endpoint |
@@ -254,6 +267,22 @@ file, or database, and rotated tokens persist through it.
 | `EmojiSet` | `GET /api/v1/emoji-set` (ETag-cached) |
 | `Me` | `GET /auth/me` |
 | `ExchangeDeviceCode`, `RefreshTokens`, `DeviceAuthURL` | `POST /auth/device/token`, `POST /auth/device/refresh` |
+
+## Raw requests
+
+For endpoints the SDK has no typed method for yet, `Get`, `Post`, `Put`,
+`Patch`, and `Delete` on the client take an API path directly and reuse
+the configured auth, token refresh, retries, client tag, and error
+mapping:
+
+```go
+var out map[string]any
+err := client.Get(ctx, "/api/v1/new-endpoint", url.Values{"page": {"2"}}, &out)
+```
+
+These are supported, not a workaround. Needing one means the SDK surface
+has a gap, and that gap is worth
+[an issue](https://github.com/spoo-me/spoo-go/issues).
 
 ## License
 
