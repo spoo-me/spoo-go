@@ -19,6 +19,14 @@ const (
 	RetryBaseDelay = 500 * time.Millisecond
 	// retryMaxDelay caps a single computed backoff.
 	retryMaxDelay = 8 * time.Second
+	// maxRetryAfter is the longest server-mandated Retry-After the
+	// retry loop will honor. Sleeps between attempts fall outside the
+	// per-attempt timeout, so honoring an arbitrary Retry-After would
+	// park the caller for unbounded wall-clock time per call. Beyond
+	// this cap the response surfaces immediately instead; the full
+	// mandated wait still reaches the caller through the error's
+	// RateLimit.RetryAfter.
+	maxRetryAfter = 60 * time.Second
 )
 
 // IdempotentMethod reports whether an HTTP method is safe to replay
@@ -61,6 +69,14 @@ func RetryDelay(base time.Duration, attempt int, retryAfter string) time.Duratio
 	}
 	d := min(base<<attempt, retryMaxDelay)
 	return d/2 + rand.N(d/2+1) //nolint:gosec // math/rand jitter; no security material
+}
+
+// RetryAfterExceedsCap reports whether a parsable Retry-After header
+// mandates a wait longer than maxRetryAfter. Callers give up on
+// retrying and surface the response instead when it does.
+func RetryAfterExceedsCap(v string) bool {
+	d, ok := ParseRetryAfter(v, time.Now())
+	return ok && d > maxRetryAfter
 }
 
 // ParseRetryAfter reads a Retry-After header value: delay seconds or an

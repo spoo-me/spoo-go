@@ -1,6 +1,34 @@
 package transport
 
-import "testing"
+import (
+	"net/http"
+	"testing"
+	"time"
+)
+
+// Only a parsable Retry-After longer than maxRetryAfter trips the cap;
+// exactly 60s is still honored, and absent or malformed headers fall
+// through to computed backoff.
+func TestRetryAfterExceedsCap(t *testing.T) {
+	tests := []struct {
+		v    string
+		want bool
+	}{
+		{"", false},
+		{"garbage", false},
+		{"0", false},
+		{"60", false},
+		{"61", true},
+		{"3600", true},
+		{time.Now().Add(2 * time.Hour).UTC().Format(http.TimeFormat), true},
+		{time.Now().Add(5 * time.Second).UTC().Format(http.TimeFormat), false},
+	}
+	for _, tt := range tests {
+		if got := RetryAfterExceedsCap(tt.v); got != tt.want {
+			t.Errorf("RetryAfterExceedsCap(%q) = %v, want %v", tt.v, got, tt.want)
+		}
+	}
+}
 
 // The filename is server-supplied and consumers hand it straight to
 // os.Create, so path-shaped suggestions must never survive: relative

@@ -129,7 +129,10 @@ func (c *Client) request(ctx context.Context, method, path string, query url.Val
 }
 
 // send builds and performs one HTTP call, retrying transient failures
-// with exponential backoff and jitter, honoring Retry-After. What
+// with exponential backoff and jitter, honoring Retry-After up to a
+// 60-second cap: a longer mandated wait surfaces the response
+// immediately instead of parking the goroutine (the full wait still
+// reaches the caller via the error's RateLimit.RetryAfter). What
 // counts as transient depends on the method: see
 // transport.RetryableStatus. Callers own the response body.
 func (c *Client) send(ctx context.Context, method, path string, query url.Values, body any, creds Credentials, extra http.Header) (*http.Response, error) {
@@ -153,7 +156,8 @@ func (c *Client) send(ctx context.Context, method, path string, query url.Values
 			if !transport.IdempotentMethod(method) || attempt >= c.maxRetries || ctx.Err() != nil {
 				return nil, err
 			}
-		} else if !transport.RetryableStatus(method, resp.StatusCode) || attempt >= c.maxRetries {
+		} else if !transport.RetryableStatus(method, resp.StatusCode) || attempt >= c.maxRetries ||
+			transport.RetryAfterExceedsCap(resp.Header.Get("Retry-After")) {
 			return resp, nil
 		}
 		var retryAfter string

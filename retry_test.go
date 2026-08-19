@@ -129,6 +129,68 @@ func TestRetryHonorsRetryAfter(t *testing.T) {
 	}
 }
 
+// A Retry-After within the 60s cap stays authoritative: the retry
+// waits out the mandated second before the next attempt.
+func TestRetryAfterWithinCapHonored(t *testing.T) {
+	var attempts atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if attempts.Add(1) == 1 {
+			w.Header().Set("Retry-After", "1")
+			w.WriteHeader(http.StatusTooManyRequests)
+			w.Write([]byte(`{"error":"slow down","code":"rate_limit_exceeded"}`))
+			return
+		}
+		w.Write([]byte(`{"user":{"id":"1"}}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(option.WithBaseURL(srv.URL))
+	fastRetries(c)
+	start := time.Now()
+	if _, err := c.Me(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := time.Since(start); elapsed < time.Second {
+		t.Fatalf("retry took %v, the mandated 1s wait was not honored", elapsed)
+	}
+	if attempts.Load() != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts.Load())
+	}
+}
+
+// A Retry-After beyond the cap would park the goroutine for the whole
+// mandated wait (sleeps between attempts sit outside the per-attempt
+// timeout), so the 429 must surface immediately, carrying the full
+// wait on the error for the caller to schedule around.
+func TestRetryAfterBeyondCapSurfacesImmediately(t *testing.T) {
+	var attempts atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts.Add(1)
+		w.Header().Set("Retry-After", "3600")
+		w.WriteHeader(http.StatusTooManyRequests)
+		w.Write([]byte(`{"error":"slow down","code":"rate_limit_exceeded"}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(option.WithBaseURL(srv.URL))
+	fastRetries(c)
+	start := time.Now()
+	_, err := c.Me(context.Background())
+	var apiErr *Error
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("err = %v, want *Error with 429", err)
+	}
+	if apiErr.RateLimit.RetryAfter != 3600*time.Second {
+		t.Fatalf("RetryAfter = %v, want 1h (the full mandated wait)", apiErr.RateLimit.RetryAfter)
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("took %v, the hour-long Retry-After was slept on", elapsed)
+	}
+	if attempts.Load() != 1 {
+		t.Fatalf("attempts = %d, want 1 (a wait past the cap must not retry)", attempts.Load())
+	}
+}
+
 // failOnceTransport drops the first request at the transport level to
 // simulate a connection error, then delegates.
 type failOnceTransport struct {
