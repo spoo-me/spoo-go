@@ -17,9 +17,15 @@ import (
 // seconds and created_at/last_click as ISO strings — all normalized to
 // [Timestamp].
 type URLItem struct {
-	ID           string    `json:"id"`
-	Alias        string    `json:"alias"`
-	LongURL      string    `json:"long_url"`
+	ID      string `json:"id"`
+	Alias   string `json:"alias"`
+	LongURL string `json:"long_url"`
+	// ShortURL is derived client-side (the management wire carries no
+	// short_url): https://<Domain>/<Alias> when the link lives on a
+	// custom domain, else the client's base URL plus the alias. Empty
+	// when Alias is empty. Emoji aliases appear unencoded, matching
+	// the shorten response.
+	ShortURL     string    `json:"-"`
 	CreatedAt    Timestamp `json:"created_at"`
 	LastClick    Timestamp `json:"last_click"`
 	TotalClicks  int       `json:"total_clicks"`
@@ -93,7 +99,21 @@ func (c *Client) ListURLs(ctx context.Context, opts ListURLsOptions) (*URLPage, 
 	if err := c.do(ctx, http.MethodGet, "/api/v1/urls", q, nil, &out); err != nil {
 		return nil, err
 	}
+	for i := range out.Items {
+		out.Items[i].ShortURL = c.shortURLFor(out.Items[i])
+	}
 	return &out, nil
+}
+
+// shortURLFor derives an item's public short URL; see URLItem.ShortURL.
+func (c *Client) shortURLFor(item URLItem) string {
+	if item.Alias == "" {
+		return ""
+	}
+	if item.Domain != "" {
+		return "https://" + item.Domain + "/" + item.Alias
+	}
+	return c.base + "/" + item.Alias
 }
 
 // ListURLsAll pages through every link matching opts, lazily fetching
@@ -137,6 +157,7 @@ func (c *Client) GetURL(ctx context.Context, id string) (*URLItem, error) {
 	if err := c.do(ctx, http.MethodGet, "/api/v1/urls/"+url.PathEscape(id), nil, nil, &out); err != nil {
 		return nil, err
 	}
+	out.ShortURL = c.shortURLFor(out)
 	return &out, nil
 }
 
@@ -157,6 +178,7 @@ func (c *Client) ResolveAlias(ctx context.Context, alias, domain string) (*URLIt
 	if err := c.do(ctx, http.MethodGet, path, nil, nil, &out); err != nil {
 		return nil, err
 	}
+	out.ShortURL = c.shortURLFor(out)
 	return &out, nil
 }
 
@@ -204,7 +226,42 @@ func (c *Client) UpdateURL(ctx context.Context, id string, params UpdateURLParam
 	return &out, nil
 }
 
+// SetURLStatus flips one owned link between ACTIVE and INACTIVE via
+// the dedicated status endpoint. BLOCKED and EXPIRED are server-owned
+// states and not caller-settable.
+func (c *Client) SetURLStatus(ctx context.Context, id, status string) (*UpdatedURL, error) {
+	body := struct {
+		Status string `json:"status"`
+	}{Status: status}
+	var out UpdatedURL
+	path := "/api/v1/urls/" + url.PathEscape(id) + "/status"
+	if err := c.do(ctx, http.MethodPatch, path, nil, body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // DeleteURL permanently deletes one owned link by its url id.
 func (c *Client) DeleteURL(ctx context.Context, id string) error {
 	return c.do(ctx, http.MethodDelete, "/api/v1/urls/"+url.PathEscape(id), nil, nil, nil)
+}
+
+// DomainDeletion reports a delete-by-domain sweep.
+type DomainDeletion struct {
+	Message string `json:"message"`
+	Count   int    `json:"count"`
+	Domain  string `json:"domain"`
+}
+
+// DeleteURLsByDomain deletes every link the account owns on the given
+// custom domain. The server refuses the system default domain, so one
+// call can never wipe the account's spoo.me inventory; the caller must
+// own the domain.
+func (c *Client) DeleteURLsByDomain(ctx context.Context, domain string) (*DomainDeletion, error) {
+	q := url.Values{"domain": {domain}}
+	var out DomainDeletion
+	if err := c.do(ctx, http.MethodDelete, "/api/v1/urls", q, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }

@@ -286,6 +286,103 @@ func TestUpdateURLTriState(t *testing.T) {
 	}
 }
 
+func TestSetURLStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch || r.URL.Path != "/api/v1/urls/abc123/status" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		body, _ := io.ReadAll(r.Body)
+		if string(body) != `{"status":"INACTIVE"}` {
+			t.Errorf("body = %s", body)
+		}
+		w.Write([]byte(`{"id":"abc123","alias":"x","status":"INACTIVE","password_set":false,"updated_at":1781524800}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(WithBaseURL(srv.URL))
+	res, err := c.SetURLStatus(context.Background(), "abc123", "INACTIVE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != "INACTIVE" || res.ID != "abc123" {
+		t.Fatalf("res = %+v", res)
+	}
+}
+
+func TestDeleteURLsByDomain(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || r.URL.Path != "/api/v1/urls" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		if r.URL.Query().Get("domain") != "links.example.com" {
+			t.Errorf("domain = %q", r.URL.Query().Get("domain"))
+		}
+		w.Write([]byte(`{"message":"deleted 42 URLs on links.example.com","count":42,"domain":"links.example.com"}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(WithBaseURL(srv.URL))
+	res, err := c.DeleteURLsByDomain(context.Background(), "links.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Count != 42 || res.Domain != "links.example.com" {
+		t.Fatalf("res = %+v", res)
+	}
+}
+
+// ShortURL is derived client-side: the item's own domain wins, the
+// client's base URL covers the default namespace, and an empty alias
+// yields no URL at all.
+func TestURLItemShortURLDerived(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(`{"items":[
+			{"id":"a","alias":"launch","password_set":false},
+			{"id":"b","alias":"promo","domain":"links.example.com","password_set":false},
+			{"id":"c","alias":"","password_set":false}
+		],"page":1,"hasNext":false}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(WithBaseURL(srv.URL))
+	page, err := c.ListURLs(context.Background(), ListURLsOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := page.Items[0].ShortURL; got != srv.URL+"/launch" {
+		t.Errorf("default namespace ShortURL = %q, want %q", got, srv.URL+"/launch")
+	}
+	if got := page.Items[1].ShortURL; got != "https://links.example.com/promo" {
+		t.Errorf("custom domain ShortURL = %q", got)
+	}
+	if got := page.Items[2].ShortURL; got != "" {
+		t.Errorf("empty alias ShortURL = %q, want empty", got)
+	}
+}
+
+func TestShortURLDerivedOnGetAndResolve(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(`{"id":"65f0abc123","alias":"launch","password_set":false}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(WithBaseURL(srv.URL))
+	got, err := c.GetURL(context.Background(), "65f0abc123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ShortURL != srv.URL+"/launch" {
+		t.Errorf("GetURL ShortURL = %q", got.ShortURL)
+	}
+	resolved, err := c.ResolveAlias(context.Background(), "launch", "spoo.me")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved.ShortURL != srv.URL+"/launch" {
+		t.Errorf("ResolveAlias ShortURL = %q", resolved.ShortURL)
+	}
+}
+
 func TestDeleteURL(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete || r.URL.Path != "/api/v1/urls/abc123" {

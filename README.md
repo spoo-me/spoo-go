@@ -126,8 +126,15 @@ stats, err := client.Stats(ctx, spoo.StatsQuery{
 // one link, addressed by alias
 stats, err = client.StatsByAlias(ctx, "launch", "spoo.me", spoo.StatsQuery{})
 
-// anyone's public stats, no auth
-stats, err = client.PublicStats(ctx, "launch", spoo.PublicStatsQuery{})
+// anyone's public stats, no auth; the result pairs link facts with stats
+public, err := client.PublicStats(ctx, "launch", spoo.PublicStatsQuery{})
+fmt.Println(public.Link.Status, public.Stats.Summary.TotalClicks)
+
+// password-protected stats: the password travels in a POST body, never
+// the query string
+public, err = client.PublicStats(ctx, "secret", spoo.PublicStatsQuery{
+    Password: "the-link-password",
+})
 ```
 
 Without explicit dates the API returns only the last 7 days; request up to
@@ -231,11 +238,12 @@ file, or database, and rotated tokens persist through it.
 | `Shorten`, `CheckAlias` | `POST /api/v1/shorten`, `GET /api/v1/shorten/check-alias` |
 | `ListURLs`, `ListURLsAll` | `GET /api/v1/urls` |
 | `GetURL`, `ResolveAlias` | `GET /api/v1/urls/{id}`, `GET /api/v1/urls/{domain}/{alias}` |
-| `UpdateURL`, `DeleteURL` | `PATCH /api/v1/urls/{id}`, `DELETE /api/v1/urls/{id}` |
+| `UpdateURL`, `SetURLStatus` | `PATCH /api/v1/urls/{id}`, `PATCH /api/v1/urls/{id}/status` |
+| `DeleteURL`, `DeleteURLsByDomain` | `DELETE /api/v1/urls/{id}`, `DELETE /api/v1/urls?domain=` |
 | `ClaimURLs` | `POST /api/v1/urls/claim` |
 | `BulkDelete`, `BulkUpdateStatus`, `BulkUpdateExpiry`, `BulkMoveDomain` | `POST /api/v1/urls/bulk/*` |
 | `Stats`, `LinkStats`, `StatsByAlias` | `GET /api/v1/stats`, `GET /api/v1/stats/links/{id}` |
-| `PublicStats`, `PublicPreview` | `GET /api/v1/public/stats/{code}`, `GET /api/v1/public/preview/{code}` |
+| `PublicStats`, `PublicPreview` | `GET or POST /api/v1/public/stats/{code}`, `GET /api/v1/public/preview/{code}` |
 | `Export`, `ExportLink` | `GET /api/v1/export` |
 | `EmojiSet` | `GET /api/v1/emoji-set` (ETag-cached) |
 | `Me` | `GET /auth/me` |

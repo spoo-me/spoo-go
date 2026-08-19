@@ -148,13 +148,40 @@ type PublicStatsQuery struct {
 	StartDate time.Time
 	EndDate   time.Time
 	Timezone  string // IANA name
+	// Password unlocks a password-protected link's stats. When set,
+	// the request goes as a POST with the password in the JSON body:
+	// the body is the only channel the API reads (query-string
+	// passwords are ignored so they cannot land in URLs, logs, or
+	// referrers). A wrong password answers 401 invalid_password,
+	// surfaced as ErrLinkPasswordProtected.
+	Password string
+}
+
+// PublicLinkFacts is the link half of the public stats envelope: what
+// the link is, alongside how it performs.
+type PublicLinkFacts struct {
+	Alias    string `json:"alias"`
+	ShortURL string `json:"short_url"`
+	// LongURL is withheld (empty) when the link is not active.
+	LongURL           string    `json:"long_url"`
+	CreatedAt         Timestamp `json:"created_at"`
+	Status            string    `json:"status"` // active | inactive | expired | blocked (lowercase)
+	MaxClicks         *int      `json:"max_clicks"`
+	BlockBots         bool      `json:"block_bots"`
+	PasswordProtected bool      `json:"password_protected"`
+}
+
+// PublicStatsResult is the full public stats envelope.
+type PublicStatsResult struct {
+	Generation string          `json:"generation"` // v1 | v2
+	Link       PublicLinkFacts `json:"link"`
+	Stats      StatsResponse   `json:"stats"`
 }
 
 // PublicStats returns anyone's per-link stats without auth. Private
-// links 404 and password-protected ones 401 (ErrLinkPasswordProtected).
-// The {generation, link, stats} envelope is unwrapped to the standard
-// stats wire.
-func (c *Client) PublicStats(ctx context.Context, shortCode string, q PublicStatsQuery) (*StatsResponse, error) {
+// links 404; password-protected ones 401 (ErrLinkPasswordProtected)
+// unless the query carries the link password.
+func (c *Client) PublicStats(ctx context.Context, shortCode string, q PublicStatsQuery) (*PublicStatsResult, error) {
 	v := url.Values{}
 	if !q.StartDate.IsZero() {
 		v.Set("start_date", q.StartDate.UTC().Format(time.RFC3339))
@@ -165,12 +192,14 @@ func (c *Client) PublicStats(ctx context.Context, shortCode string, q PublicStat
 	if q.Timezone != "" {
 		v.Set("timezone", q.Timezone)
 	}
-	var out struct {
-		Stats StatsResponse `json:"stats"`
+	method, body := http.MethodGet, any(nil)
+	if q.Password != "" {
+		method, body = http.MethodPost, map[string]string{"password": q.Password}
 	}
+	var out PublicStatsResult
 	path := "/api/v1/public/stats/" + url.PathEscape(shortCode)
-	if err := c.do(ctx, http.MethodGet, path, v, nil, &out); err != nil {
+	if err := c.do(ctx, method, path, v, body, &out); err != nil {
 		return nil, err
 	}
-	return &out.Stats, nil
+	return &out, nil
 }

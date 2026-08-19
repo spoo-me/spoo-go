@@ -113,21 +113,24 @@ func TestStatsByAlias(t *testing.T) {
 	}
 }
 
-func TestPublicStatsUnwrapsEnvelope(t *testing.T) {
+func TestPublicStatsReturnsEnvelope(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/public/stats/launch" {
 			t.Errorf("path = %s", r.URL.Path)
+		}
+		if r.Method != http.MethodGet {
+			t.Errorf("method = %s, want GET without a password", r.Method)
 		}
 		q := r.URL.Query()
 		if q.Get("start_date") != "2026-01-01T00:00:00Z" || q.Get("timezone") != "UTC" {
 			t.Errorf("unexpected query: %v", q)
 		}
-		if q.Has("group_by") || q.Has("scope") {
+		if q.Has("group_by") || q.Has("scope") || q.Has("password") {
 			t.Errorf("public endpoint takes only a range and timezone: %v", q)
 		}
 		w.Write([]byte(`{
 			"generation": "v2",
-			"link": {"alias": "launch", "domain": "spoo.me"},
+			"link": {"alias": "launch", "short_url": "https://spoo.me/launch", "long_url": "https://example.com/x", "status": "active", "password_protected": false, "block_bots": true},
 			"stats": {
 				"scope": "anon",
 				"summary": {"total_clicks": 9, "unique_clicks": 5},
@@ -145,8 +148,69 @@ func TestPublicStatsUnwrapsEnvelope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Summary.TotalClicks != 9 || len(res.Metrics["clicks_by_browser"]) != 1 {
+	if res.Stats.Summary.TotalClicks != 9 || len(res.Stats.Metrics["clicks_by_browser"]) != 1 {
+		t.Fatalf("stats = %+v", res.Stats)
+	}
+	link := res.Link
+	if link.Alias != "launch" || link.ShortURL != "https://spoo.me/launch" || link.Status != "active" || !link.BlockBots {
+		t.Fatalf("link facts = %+v", link)
+	}
+	if res.Generation != "v2" {
+		t.Fatalf("generation = %q", res.Generation)
+	}
+}
+
+// A password rides in a POST body, never the query string (the API
+// ignores query-string passwords so they cannot land in URLs or logs).
+func TestPublicStatsPasswordGoesInPOSTBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s, want POST with a password", r.Method)
+		}
+		if r.URL.Query().Has("password") {
+			t.Errorf("password leaked into the query string: %v", r.URL.Query())
+		}
+		if r.URL.Query().Get("timezone") != "UTC" {
+			t.Errorf("query params must still ride the URL: %v", r.URL.Query())
+		}
+		body, _ := io.ReadAll(r.Body)
+		if string(body) != `{"password":"hunter22"}` {
+			t.Errorf("body = %s", body)
+		}
+		w.Write([]byte(`{
+			"generation": "v2",
+			"link": {"alias": "secret", "short_url": "https://spoo.me/secret", "status": "active", "password_protected": true, "block_bots": false},
+			"stats": {"summary": {"total_clicks": 3, "unique_clicks": 2}, "metrics": {}}
+		}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(WithBaseURL(srv.URL))
+	res, err := c.PublicStats(context.Background(), "secret", PublicStatsQuery{
+		Timezone: "UTC",
+		Password: "hunter22",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Link.PasswordProtected || res.Stats.Summary.TotalClicks != 3 {
 		t.Fatalf("res = %+v", res)
+	}
+}
+
+// A wrong password keeps the typed 401 semantics.
+func TestPublicStatsWrongPassword(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("X-Error-Code", "invalid_password")
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error":"Invalid password","code":"invalid_password"}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(WithBaseURL(srv.URL))
+	_, err := c.PublicStats(context.Background(), "secret", PublicStatsQuery{Password: "wrong"})
+	if !errors.Is(err, ErrLinkPasswordProtected) {
+		t.Fatalf("err = %v, want ErrLinkPasswordProtected", err)
 	}
 }
 
