@@ -37,6 +37,12 @@ var (
 // client has no refresh-capable TokenSource to rotate.
 var ErrTokenSourceRequired = errors.New("no refresh-capable token source configured")
 
+// ErrMissingLongURL is returned by [Client.Shorten] before any request
+// goes out when ShortenRequest.LongURL is empty. An empty required
+// field is a programming error at the call site, so it fails fast
+// instead of spending a round trip on a guaranteed 422.
+var ErrMissingLongURL = errors.New("spoo: ShortenRequest.LongURL is required")
+
 // RateLimit is the backend's rate-limit state parsed from the
 // X-RateLimit-* and Retry-After response headers (zero when absent).
 // The backend reports the shortest rate-limit window that applies to

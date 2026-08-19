@@ -38,8 +38,13 @@ type ShortURL struct {
 }
 
 // Shorten creates a short link. Anonymous calls work and return a
-// one-time ClaimToken; authenticated calls create owned links.
+// one-time ClaimToken; authenticated calls create owned links. An
+// empty LongURL fails with [ErrMissingLongURL] before any request
+// goes out.
 func (c *Client) Shorten(ctx context.Context, req ShortenRequest) (*ShortURL, error) {
+	if req.LongURL == "" {
+		return nil, ErrMissingLongURL
+	}
 	var out ShortURL
 	if err := c.do(ctx, http.MethodPost, "/api/v1/shorten", nil, req, &out); err != nil {
 		return nil, err

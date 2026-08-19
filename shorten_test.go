@@ -3,6 +3,7 @@ package spoo
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -35,6 +36,21 @@ func TestShorten(t *testing.T) {
 	}
 	if res.ShortURL != "https://spoo.me/mylink" {
 		t.Fatalf("ShortURL = %q", res.ShortURL)
+	}
+}
+
+// The zero-valued request compiles, so an empty LongURL must fail
+// before it becomes {"long_url": ""} on the wire.
+func TestShortenRejectsEmptyLongURL(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		t.Errorf("no request should go out, got %s %s", r.Method, r.URL.Path)
+	}))
+	defer srv.Close()
+
+	c := NewClient(option.WithBaseURL(srv.URL))
+	_, err := c.Shorten(context.Background(), ShortenRequest{Alias: "mylink"})
+	if !errors.Is(err, ErrMissingLongURL) {
+		t.Fatalf("err = %v, want ErrMissingLongURL", err)
 	}
 }
 
