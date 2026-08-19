@@ -1,0 +1,8 @@
+# Editors and OS noise
+.DS_Store
+.idea/
+.vscode/
+
+# Test and coverage artifacts
+*.out
+*.test
