@@ -3,6 +3,7 @@ package spoo
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -74,6 +75,59 @@ func TestDeviceAuthURL(t *testing.T) {
 	}
 	if got := q.Get("code_challenge"); got != CodeChallengeS256(verifier) {
 		t.Errorf("code_challenge = %q does not match S256(verifier)", got)
+	}
+}
+
+// An empty RedirectURI defers to the app's registered default and stays
+// off the URL entirely.
+func TestDeviceAuthURLOmitsEmptyRedirectURI(t *testing.T) {
+	c := NewClient(WithBaseURL("https://spoo.example"))
+	raw := c.DeviceAuthURL(DeviceAuthParams{
+		AppID:         "my-app",
+		State:         "st4te",
+		CodeChallenge: CodeChallengeS256("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"),
+	})
+	u, err := url.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Query().Has("redirect_uri") {
+		t.Fatalf("redirect_uri must be omitted when empty: %s", raw)
+	}
+}
+
+// ForceRefresh rotates on demand, persisting through the TokenSource.
+func TestForceRefresh(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/auth/device/refresh" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		w.Write([]byte(`{"access_token":"newAT","refresh_token":"newRT"}`))
+	}))
+	defer srv.Close()
+
+	source := StaticTokens("oldAT", "oldRT")
+	c := NewClient(WithBaseURL(srv.URL), WithTokenSource(source))
+	creds, err := c.ForceRefresh(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if creds.AccessToken != "newAT" {
+		t.Fatalf("creds = %+v", creds)
+	}
+	persisted, err := source.Token(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if persisted.RefreshToken != "newRT" {
+		t.Fatalf("persisted = %+v", persisted)
+	}
+}
+
+func TestForceRefreshWithoutSource(t *testing.T) {
+	c := NewClient(WithAPIKey("spoo_key"))
+	if _, err := c.ForceRefresh(context.Background()); !errors.Is(err, ErrTokenSourceRequired) {
+		t.Fatalf("err = %v, want ErrTokenSourceRequired", err)
 	}
 }
 

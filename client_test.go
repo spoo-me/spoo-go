@@ -62,7 +62,7 @@ func TestClientHeaderRejectsMalformedVersion(t *testing.T) {
 func TestDoParsesErrorEnvelope(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusConflict)
-		w.Write([]byte(`{"error":"alias already taken","code":"CONFLICT_ERROR","detail":"try another"}`))
+		w.Write([]byte(`{"error":"alias already taken","code":"CONFLICT_ERROR","field":"alias"}`))
 	}))
 	defer srv.Close()
 
@@ -74,6 +74,9 @@ func TestDoParsesErrorEnvelope(t *testing.T) {
 	}
 	if apiErr.StatusCode != 409 || apiErr.Code != "CONFLICT_ERROR" || apiErr.Message != "alias already taken" {
 		t.Fatalf("unexpected Error: %+v", apiErr)
+	}
+	if apiErr.Field != "alias" {
+		t.Fatalf("Field = %q, want alias", apiErr.Field)
 	}
 }
 

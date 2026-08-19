@@ -35,6 +35,11 @@ type Client struct {
 	// only one goroutine may spend the rotating refresh token — a
 	// second spender would persist a dead pair.
 	refreshMu sync.Mutex
+
+	// emojiMu guards the ETag-validated emoji-set cache.
+	emojiMu    sync.Mutex
+	emojiETag  string
+	emojiCache *EmojiSet
 }
 
 // NewClient returns a Client for the hosted spoo.me API, anonymous
@@ -103,7 +108,7 @@ func (c *Client) request(ctx context.Context, method, path string, query url.Val
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.send(ctx, method, path, query, body, creds)
+	resp, err := c.send(ctx, method, path, query, body, creds, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +127,7 @@ func (c *Client) request(ctx context.Context, method, path string, query url.Val
 			if creds, err = c.refreshCredentials(ctx, creds); err != nil {
 				return nil, err
 			}
-			if resp, err = c.send(ctx, method, path, query, body, creds); err != nil {
+			if resp, err = c.send(ctx, method, path, query, body, creds, nil); err != nil {
 				return nil, err
 			}
 		}
@@ -133,7 +138,7 @@ func (c *Client) request(ctx context.Context, method, path string, query url.Val
 // send builds and performs one HTTP call, retrying transient failures
 // (connection errors, 408, 429, 5xx) with exponential backoff and
 // jitter, honoring Retry-After. Callers own the response body.
-func (c *Client) send(ctx context.Context, method, path string, query url.Values, body any, creds Credentials) (*http.Response, error) {
+func (c *Client) send(ctx context.Context, method, path string, query url.Values, body any, creds Credentials, extra http.Header) (*http.Response, error) {
 	u := c.base + path
 	if len(query) > 0 {
 		u += "?" + query.Encode()
@@ -147,7 +152,7 @@ func (c *Client) send(ctx context.Context, method, path string, query url.Values
 		payload = data
 	}
 	for attempt := 0; ; attempt++ {
-		resp, err := c.sendOnce(ctx, method, u, payload, creds)
+		resp, err := c.sendOnce(ctx, method, u, payload, creds, extra)
 		if err != nil {
 			if attempt >= c.maxRetries || ctx.Err() != nil {
 				return nil, err
@@ -166,7 +171,7 @@ func (c *Client) send(ctx context.Context, method, path string, query url.Values
 	}
 }
 
-func (c *Client) sendOnce(ctx context.Context, method, u string, payload []byte, creds Credentials) (*http.Response, error) {
+func (c *Client) sendOnce(ctx context.Context, method, u string, payload []byte, creds Credentials, extra http.Header) (*http.Response, error) {
 	var rdr io.Reader
 	if payload != nil {
 		rdr = bytes.NewReader(payload)
@@ -183,7 +188,26 @@ func (c *Client) sendOnce(ctx context.Context, method, u string, payload []byte,
 	if bearer := creds.bearer(); bearer != "" {
 		req.Header.Set("Authorization", "Bearer "+bearer)
 	}
+	for name, values := range extra {
+		req.Header[name] = values
+	}
 	return c.http.Do(req)
+}
+
+// ForceRefresh invalidates the current access token and refreshes the
+// device-flow pair immediately, persisting the rotation through the
+// TokenSource. It shares the client's single-flight guarantee, so
+// concurrent callers trigger at most one exchange. It fails with
+// ErrTokenSourceRequired when the client has no refresh-capable source.
+func (c *Client) ForceRefresh(ctx context.Context) (Credentials, error) {
+	creds, err := c.credentials(ctx)
+	if err != nil {
+		return Credentials{}, err
+	}
+	if creds.RefreshToken == "" {
+		return Credentials{}, ErrTokenSourceRequired
+	}
+	return c.refreshCredentials(ctx, creds)
 }
 
 // refreshCredentials exchanges the refresh token for a new pair and

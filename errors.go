@@ -25,6 +25,10 @@ var (
 	ErrLinkPasswordProtected = errors.New("link is password protected")
 )
 
+// ErrTokenSourceRequired is returned by [Client.ForceRefresh] when the
+// client has no refresh-capable TokenSource to rotate.
+var ErrTokenSourceRequired = errors.New("no refresh-capable token source configured")
+
 // RateLimit is the backend's rate-limit state parsed from the
 // X-RateLimit-* and Retry-After response headers (zero when absent).
 // The backend reports the shortest rate-limit window that applies to
@@ -40,18 +44,23 @@ type RateLimit struct {
 	RetryAfter time.Duration
 }
 
-// Error mirrors the backend's error envelope {error, code, detail} plus
-// the response metadata that matters for handling it programmatically.
+// Error mirrors the backend's error envelope {error, code, field,
+// details} plus the response metadata that matters for handling it
+// programmatically.
 type Error struct {
 	// StatusCode is the HTTP status of the response.
 	StatusCode int `json:"-"`
 	// Code is the backend's machine-readable error code, an open enum
-	// (e.g. "CONFLICT_ERROR", "AUTHENTICATION_ERROR").
+	// (e.g. "CONFLICT_ERROR", "AUTHENTICATION_ERROR"). Read from the
+	// body, with the X-Error-Code header as fallback for the
+	// edge-composed responses whose bodies carry no envelope.
 	Code string `json:"code"`
 	// Message is the human-readable error message.
 	Message string `json:"error"`
-	// Detail optionally elaborates on Message.
-	Detail string `json:"detail"`
+	// Field names the offending request field on validation errors.
+	Field string `json:"field"`
+	// Details optionally carries structured context for the error.
+	Details any `json:"details"`
 	// RequestID is the X-Request-ID header, for support correlation.
 	RequestID string `json:"-"`
 	// RateLimit carries the parsed X-RateLimit-* headers.
@@ -61,8 +70,8 @@ type Error struct {
 }
 
 func (e *Error) Error() string {
-	if e.Detail != "" {
-		return fmt.Sprintf("%s (%s)", e.Message, e.Detail)
+	if e.Field != "" {
+		return fmt.Sprintf("%s (field %q)", e.Message, e.Field)
 	}
 	return e.Message
 }
@@ -92,6 +101,9 @@ func newError(resp *http.Response) *Error {
 	e := &Error{StatusCode: resp.StatusCode, Message: resp.Status}
 	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	_ = json.Unmarshal(data, e)
+	if e.Code == "" {
+		e.Code = resp.Header.Get("X-Error-Code")
+	}
 	e.RequestID = resp.Header.Get("X-Request-ID")
 	e.RateLimit = parseRateLimit(resp.Header)
 	if resp.StatusCode == http.StatusUnauthorized {

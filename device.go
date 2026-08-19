@@ -65,18 +65,18 @@ func GenerateState() (string, error) {
 }
 
 // DeviceAuthParams parameterizes the browser leg of the device flow.
-// All fields are required.
 type DeviceAuthParams struct {
 	// AppID is the app's identifier in the backend's connected-apps
-	// registry.
+	// registry. Required.
 	AppID string
 	// RedirectURI receives the one-time code. It must EXACTLY match a
-	// redirect URI registered for the app.
+	// redirect URI registered for the app; leave empty to use the
+	// app's registered default.
 	RedirectURI string
-	// State from GenerateState, echoed back on the callback.
+	// State from GenerateState, echoed back on the callback. Required.
 	State string
 	// CodeChallenge from CodeChallengeS256; keep the verifier for
-	// ExchangeDeviceCode.
+	// ExchangeDeviceCode. Required.
 	CodeChallenge string
 }
 
@@ -86,10 +86,12 @@ type DeviceAuthParams struct {
 func (c *Client) DeviceAuthURL(p DeviceAuthParams) string {
 	q := url.Values{
 		"app_id":                {p.AppID},
-		"redirect_uri":          {p.RedirectURI},
 		"state":                 {p.State},
 		"code_challenge":        {p.CodeChallenge},
 		"code_challenge_method": {"S256"},
+	}
+	if p.RedirectURI != "" {
+		q.Set("redirect_uri", p.RedirectURI)
 	}
 	return c.base + "/auth/device/login?" + q.Encode()
 }
@@ -131,7 +133,7 @@ func (c *Client) deviceRefresh(ctx context.Context, appID, refreshToken string) 
 	if appID != "" {
 		body["app_id"] = appID
 	}
-	resp, err := c.send(ctx, http.MethodPost, "/auth/device/refresh", nil, body, Credentials{})
+	resp, err := c.send(ctx, http.MethodPost, "/auth/device/refresh", nil, body, Credentials{}, nil)
 	if err != nil {
 		return nil, err
 	}
