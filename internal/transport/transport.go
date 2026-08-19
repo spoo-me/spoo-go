@@ -17,7 +17,7 @@ const (
 	// RetryBaseDelay is the exponential-backoff unit.
 	RetryBaseDelay = 500 * time.Millisecond
 	// retryMaxDelay caps a single computed backoff.
-	retryMaxDelay = 10 * time.Second
+	retryMaxDelay = 8 * time.Second
 )
 
 // IdempotentMethod reports whether an HTTP method is safe to replay

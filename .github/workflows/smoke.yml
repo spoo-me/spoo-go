@@ -1,0 +1,30 @@
+name: Production smoke
+
+# Runs the SDK against production daily behind the smoke build tag:
+# create, per-link stats, emoji catalogue, delete. Requires the
+# SPOO_SMOKE_API_KEY secret (dedicated low-scope key).
+on:
+  schedule:
+    - cron: "20 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    if: github.repository == 'spoo-me/spoo-go'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: stable
+
+      - name: Smoke against production
+        env:
+          SPOO_SMOKE_API_KEY: ${{ secrets.SPOO_SMOKE_API_KEY }}
+        run: go test -tags smoke -run TestProdSmoke -v -count=1 .
