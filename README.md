@@ -3,9 +3,12 @@
 The official Go SDK for the [spoo.me](https://spoo.me) link management API.
 
 ```go
-import spoo "github.com/spoo-me/spoo-go"
+import (
+    spoo "github.com/spoo-me/spoo-go"
+    "github.com/spoo-me/spoo-go/option"
+)
 
-client := spoo.NewClient(spoo.WithAPIKey(os.Getenv("SPOO_API_KEY")))
+client := spoo.NewClient(option.WithAPIKey(os.Getenv("SPOO_API_KEY")))
 
 link, err := client.Shorten(ctx, spoo.ShortenRequest{
     LongURL: "https://example.com/launch",
@@ -32,7 +35,7 @@ Create an API key from your [spoo.me dashboard](https://spoo.me) and pass it
 explicitly:
 
 ```go
-client := spoo.NewClient(spoo.WithAPIKey(os.Getenv("SPOO_API_KEY")))
+client := spoo.NewClient(option.WithAPIKey(os.Getenv("SPOO_API_KEY")))
 ```
 
 Constructing without credentials is valid too: anonymous shortening and the
@@ -41,13 +44,13 @@ public endpoints (stats, previews, the emoji set) work without an account.
 Self-hosting spoo.me? Point the client at your instance:
 
 ```go
-client := spoo.NewClient(spoo.WithBaseURL("https://links.example.com"))
+client := spoo.NewClient(option.WithBaseURL("https://links.example.com"))
 ```
 
 Apps built on the SDK should set their own attribution tag:
 
 ```go
-client := spoo.NewClient(spoo.WithClientTag("my-app/1.0.0"))
+client := spoo.NewClient(option.WithClientTag("my-app/1.0.0"))
 ```
 
 ## Shorten links
@@ -184,7 +187,7 @@ Common branches have predicates and sentinels:
 
 Connection errors, 408, 429, and 5xx responses are retried twice by default
 with exponential backoff and jitter. A `Retry-After` header is authoritative
-when the server sends one. Configure with `spoo.WithMaxRetries(n)`; 0
+when the server sends one. Configure with `option.WithMaxRetries(n)`; 0
 disables retries.
 
 ## Pagination
@@ -223,7 +226,7 @@ concurrency (one refresh at a time, rotation persisted through your
 
 ```go
 client := spoo.NewClient(
-    spoo.WithTokenSource(spoo.StaticTokens(tokens.AccessToken, tokens.RefreshToken)),
+    option.WithTokenSource(spoo.StaticTokens(tokens.AccessToken, tokens.RefreshToken)),
 )
 ```
 
