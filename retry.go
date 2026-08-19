@@ -29,7 +29,7 @@ func (c *Client) retryDelay(attempt int, retryAfter string) time.Duration {
 		return d
 	}
 	d := min(c.retryBase<<attempt, retryMaxDelay)
-	return d/2 + rand.N(d/2+1)
+	return d/2 + rand.N(d/2+1) //nolint:gosec // math/rand jitter; no security material
 }
 
 // sleep waits for d or until ctx is done, whichever comes first.
@@ -51,5 +51,5 @@ func sleep(ctx context.Context, d time.Duration) error {
 // connection can be reused.
 func drain(resp *http.Response) {
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
-	resp.Body.Close()
+	_ = resp.Body.Close()
 }

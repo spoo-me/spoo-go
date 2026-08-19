@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+// ShortenRequest creates a short link. Only LongURL is required;
+// zero-valued optionals are omitted from the request.
 type ShortenRequest struct {
 	LongURL      string    `json:"long_url"`
 	Alias        string    `json:"alias,omitempty"`
@@ -35,6 +37,8 @@ type ShortURL struct {
 	ClaimToken string `json:"claim_token"`
 }
 
+// Shorten creates a short link. Anonymous calls work and return a
+// one-time ClaimToken; authenticated calls create owned links.
 func (c *Client) Shorten(ctx context.Context, req ShortenRequest) (*ShortURL, error) {
 	var out ShortURL
 	if err := c.do(ctx, http.MethodPost, "/api/v1/shorten", nil, req, &out); err != nil {
@@ -43,11 +47,16 @@ func (c *Client) Shorten(ctx context.Context, req ShortenRequest) (*ShortURL, er
 	return &out, nil
 }
 
+// AliasCheck reports whether an alias is free to use, with the
+// rejection reason when it is not (length, format, reserved, taken,
+// or emoji_policy).
 type AliasCheck struct {
 	Available bool   `json:"available"`
 	Reason    string `json:"reason"`
 }
 
+// CheckAlias reports whether alias is available, on the given domain
+// when one is passed.
 func (c *Client) CheckAlias(ctx context.Context, alias, domain string) (*AliasCheck, error) {
 	q := url.Values{"alias": {alias}}
 	if domain != "" {

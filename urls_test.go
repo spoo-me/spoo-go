@@ -84,7 +84,7 @@ func TestListURLsAllPagesLazily(t *testing.T) {
 
 func TestListURLsAllStopsOnEarlyBreak(t *testing.T) {
 	var requests int
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		requests++
 		w.Write([]byte(`{"items":[{"id":"a","password_set":false},{"id":"b","password_set":false}],"page":1,"hasNext":true}`))
 	}))
@@ -105,7 +105,7 @@ func TestListURLsAllStopsOnEarlyBreak(t *testing.T) {
 }
 
 func TestListURLsAllYieldsFetchError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		w.Write([]byte(`{"error":"nope","code":"AUTHORIZATION_ERROR"}`))
 	}))
@@ -167,7 +167,7 @@ func TestResolveAliasEscapesPath(t *testing.T) {
 // URL: a self-hosted client would silently resolve against the wrong
 // namespace otherwise.
 func TestResolveAliasRequiresDomain(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		t.Error("no request must be sent without a domain")
 	}))
 	defer srv.Close()
@@ -179,7 +179,7 @@ func TestResolveAliasRequiresDomain(t *testing.T) {
 }
 
 func TestResolveAliasNotFound(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte(`{"error":"URL not found","code":"not_found"}`))
 	}))

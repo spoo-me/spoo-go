@@ -43,7 +43,7 @@ func TestEmptyAPIKeyStaysAnonymous(t *testing.T) {
 }
 
 func TestTokenSourceErrorAborts(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		t.Error("request must not be sent when the token source fails")
 	}))
 	defer srv.Close()
@@ -97,7 +97,7 @@ func TestWithHTTPClientKeepsRedirectStrip(t *testing.T) {
 
 	var customRan bool
 	hc := &http.Client{
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 			customRan = true
 			return nil
 		},

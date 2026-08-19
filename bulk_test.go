@@ -106,17 +106,17 @@ func TestBulkMoveDomainWire(t *testing.T) {
 	if _, err := c.BulkMoveDomain(context.Background(), []string{"a"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	var move, clear map[string]json.RawMessage
+	var move, cleared map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(bodies[0]), &move); err != nil {
 		t.Fatal(err)
 	}
-	if err := json.Unmarshal([]byte(bodies[1]), &clear); err != nil {
+	if err := json.Unmarshal([]byte(bodies[1]), &cleared); err != nil {
 		t.Fatal(err)
 	}
 	if string(move["domain"]) != `"links.example.com"` {
 		t.Fatalf("move body = %s", bodies[0])
 	}
-	if string(clear["domain"]) != "null" {
+	if string(cleared["domain"]) != "null" {
 		t.Fatalf("clear body = %s", bodies[1])
 	}
 }

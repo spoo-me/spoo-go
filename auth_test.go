@@ -8,7 +8,7 @@ import (
 )
 
 func TestMe(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Write([]byte(`{"user":{"id":"1","email":"a@b.c","email_verified":true,"name":"A","plan":"free"}}`))
 	}))
 	defer srv.Close()

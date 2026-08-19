@@ -45,6 +45,8 @@ func (o Opt[T]) Value() (T, bool) {
 	return o.value, o.state == optSet
 }
 
+// MarshalJSON writes the carried value, or null for the other states
+// (omitted values are dropped earlier by omitzero tags).
 func (o Opt[T]) MarshalJSON() ([]byte, error) {
 	if o.state == optSet {
 		return json.Marshal(o.value)
@@ -54,6 +56,7 @@ func (o Opt[T]) MarshalJSON() ([]byte, error) {
 	return []byte("null"), nil
 }
 
+// UnmarshalJSON reads null as [Null] and any value as [Set].
 func (o *Opt[T]) UnmarshalJSON(data []byte) error {
 	if string(data) == "null" {
 		*o = Null[T]()

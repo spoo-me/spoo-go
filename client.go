@@ -123,7 +123,7 @@ func (c *Client) request(ctx context.Context, method, path string, query url.Val
 			return nil, newError(resp)
 		}
 		if creds.RefreshToken != "" {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			if creds, err = c.refreshCredentials(ctx, creds); err != nil {
 				return nil, err
 			}

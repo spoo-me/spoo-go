@@ -43,7 +43,7 @@ func TestPublicPreview(t *testing.T) {
 
 // A non-active link previews with a nil destination.
 func TestPublicPreviewWithheldDestination(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Write([]byte(`{
 			"generation": "v1",
 			"alias": "gone",

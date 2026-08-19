@@ -32,6 +32,8 @@ type URLItem struct {
 	Domain       string    `json:"domain"`
 }
 
+// URLPage is one page of the account's links. HasNext reports whether
+// requesting Page+1 yields more.
 type URLPage struct {
 	Items     []URLItem `json:"items"`
 	Page      int       `json:"page"`
@@ -42,6 +44,8 @@ type URLPage struct {
 	SortOrder string    `json:"sortOrder"`
 }
 
+// ListURLsOptions filters, sorts, and pages the account's links.
+// Zero values defer to the server defaults.
 type ListURLsOptions struct {
 	Page      int
 	PageSize  int
@@ -52,6 +56,8 @@ type ListURLsOptions struct {
 	Domain    string
 }
 
+// ListURLs returns one page of the account's links; ListURLsAll
+// iterates them all.
 func (c *Client) ListURLs(ctx context.Context, opts ListURLsOptions) (*URLPage, error) {
 	q := url.Values{}
 	if opts.Page > 0 {
@@ -188,6 +194,8 @@ type UpdateURLParams struct {
 	PrivateStats Opt[bool]      `json:"private_stats,omitzero"`
 }
 
+// UpdateURL patches one owned link by its url id. See
+// [UpdateURLParams] for the tri-state field semantics.
 func (c *Client) UpdateURL(ctx context.Context, id string, params UpdateURLParams) (*UpdatedURL, error) {
 	var out UpdatedURL
 	if err := c.do(ctx, http.MethodPatch, "/api/v1/urls/"+url.PathEscape(id), nil, params, &out); err != nil {
@@ -196,6 +204,7 @@ func (c *Client) UpdateURL(ctx context.Context, id string, params UpdateURLParam
 	return &out, nil
 }
 
+// DeleteURL permanently deletes one owned link by its url id.
 func (c *Client) DeleteURL(ctx context.Context, id string) error {
 	return c.do(ctx, http.MethodDelete, "/api/v1/urls/"+url.PathEscape(id), nil, nil, nil)
 }

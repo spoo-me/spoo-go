@@ -60,7 +60,7 @@ func TestClientHeaderRejectsMalformedVersion(t *testing.T) {
 }
 
 func TestDoParsesErrorEnvelope(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusConflict)
 		w.Write([]byte(`{"error":"alias already taken","code":"CONFLICT_ERROR","field":"alias"}`))
 	}))

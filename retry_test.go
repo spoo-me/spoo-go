@@ -16,7 +16,7 @@ func fastRetries(c *Client) { c.retryBase = time.Millisecond }
 
 func TestRetriesTransient5xxThenSucceeds(t *testing.T) {
 	var attempts atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		if attempts.Add(1) <= 2 {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			w.Write([]byte(`{"error":"upstream hiccup"}`))
@@ -42,7 +42,7 @@ func TestRetriesTransient5xxThenSucceeds(t *testing.T) {
 
 func TestRetriesExhaustedReturnTheError(t *testing.T) {
 	var attempts atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		attempts.Add(1)
 		w.WriteHeader(http.StatusBadGateway)
 		w.Write([]byte(`{"error":"still down","code":"UPSTREAM_ERROR"}`))
@@ -63,7 +63,7 @@ func TestRetriesExhaustedReturnTheError(t *testing.T) {
 
 func TestNoRetryOnClientError(t *testing.T) {
 	var attempts atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		attempts.Add(1)
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(`{"error":"bad alias","code":"VALIDATION_ERROR"}`))
@@ -82,7 +82,7 @@ func TestNoRetryOnClientError(t *testing.T) {
 
 func TestWithMaxRetriesZeroDisablesRetries(t *testing.T) {
 	var attempts atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		attempts.Add(1)
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
@@ -102,7 +102,7 @@ func TestWithMaxRetriesZeroDisablesRetries(t *testing.T) {
 // base delay, a Retry-After: 0 hint must make the retry immediate.
 func TestRetryHonorsRetryAfter(t *testing.T) {
 	var attempts atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		if attempts.Add(1) == 1 {
 			w.Header().Set("Retry-After", "0")
 			w.WriteHeader(http.StatusTooManyRequests)
@@ -142,7 +142,7 @@ func (f *failOnceTransport) RoundTrip(req *http.Request) (*http.Response, error)
 }
 
 func TestRetriesConnectionErrors(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Write([]byte(`{"user":{"id":"1"}}`))
 	}))
 	defer srv.Close()
@@ -182,7 +182,7 @@ func TestRetryReplaysRequestBody(t *testing.T) {
 }
 
 func TestRetryStopsOnContextCancel(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
 	defer srv.Close()

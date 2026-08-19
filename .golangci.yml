@@ -1,0 +1,31 @@
+version: "2"
+
+linters:
+  # The standard set (errcheck, govet, ineffassign, staticcheck,
+  # unused) stays enabled; these are additions.
+  enable:
+    - bodyclose
+    - errorlint
+    - exhaustive
+    - gocritic
+    - gosec
+    - noctx
+    - revive
+  exclusions:
+    presets:
+      - common-false-positives
+      - std-error-handling
+    rules:
+      # Test handlers write mock responses and close bodies loosely on
+      # purpose; the assertions are the point.
+      - path: _test\.go
+        linters:
+          - bodyclose
+          - errcheck
+          - gosec
+          - noctx
+
+formatters:
+  # gofmt only; gofumpt intentionally off to match the existing style.
+  enable:
+    - gofmt

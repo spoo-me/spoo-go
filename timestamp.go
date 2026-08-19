@@ -27,6 +27,8 @@ var timestampLayouts = []string{
 	"2006-01-02",
 }
 
+// UnmarshalJSON accepts Unix seconds, ISO 8601 strings, null, and the
+// empty string (the latter two yield the zero value).
 func (t *Timestamp) UnmarshalJSON(data []byte) error {
 	s := string(data)
 	if s == "null" || s == `""` {

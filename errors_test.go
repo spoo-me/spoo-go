@@ -10,7 +10,7 @@ import (
 )
 
 func TestErrorParsesRateLimitAndRequestID(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("X-Request-ID", "req-abc123")
 		w.Header().Set("X-RateLimit-Limit", "100")
 		w.Header().Set("X-RateLimit-Remaining", "0")
@@ -85,7 +85,7 @@ func TestRefreshRejectionIsSessionExpired(t *testing.T) {
 // The sentinel must not fire for auth failures that are not about the
 // refresh token: a plain 401 without a refresh token is just an *Error.
 func TestPlain401IsNotSessionExpired(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		w.Write([]byte(`{"error":"authentication required","code":"AUTHENTICATION_ERROR"}`))
 	}))

@@ -53,7 +53,7 @@ func TestEmojiSetETagCache(t *testing.T) {
 
 // A changed ETag replaces the cache instead of serving stale data.
 func TestEmojiSetCacheInvalidation(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("ETag", `"v2"`)
 		w.Write([]byte(`{"accept_max_version": 16.0, "generate_max_version": 14.0, "max_graphemes": 15, "emoji": []}`))
 	}))

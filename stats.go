@@ -49,6 +49,7 @@ func (q StatsQuery) values() url.Values {
 	return v
 }
 
+// StatsSummary is the headline aggregate for a stats window.
 type StatsSummary struct {
 	TotalClicks        int       `json:"total_clicks"`
 	UniqueClicks       int       `json:"unique_clicks"`
@@ -57,6 +58,7 @@ type StatsSummary struct {
 	AvgRedirectionTime float64   `json:"avg_redirection_time"`
 }
 
+// StatsTimeRange echoes the window a stats response covers.
 type StatsTimeRange struct {
 	StartDate Timestamp `json:"start_date"`
 	EndDate   Timestamp `json:"end_date"`
@@ -81,6 +83,8 @@ type StatsResponse struct {
 // want "all recent activity" should request this window explicitly.
 const MaxRangeDays = 90
 
+// MetricPoint is one (label, value) pair extracted from the loosely
+// typed metrics payload by [StatsResponse.Points].
 type MetricPoint struct {
 	Label string
 	Value float64
