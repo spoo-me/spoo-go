@@ -19,7 +19,7 @@ func TestErrorParsesRateLimitAndRequestID(t *testing.T) {
 		w.Header().Set("X-RateLimit-Reset", "1755500000")
 		w.Header().Set("Retry-After", "30")
 		w.WriteHeader(http.StatusTooManyRequests)
-		w.Write([]byte(`{"error":"rate limit exceeded","code":"RATE_LIMIT_ERROR"}`))
+		w.Write([]byte(`{"error":"rate limit exceeded","code":"rate_limit_exceeded"}`))
 	}))
 	defer srv.Close()
 
@@ -47,6 +47,52 @@ func TestErrorParsesRateLimitAndRequestID(t *testing.T) {
 	}
 }
 
+// 451 is the live safety takedown: integrators branch on it to tell
+// "the link was removed" apart from "something broke".
+func TestBlocked451(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("X-Error-Code", "blocked")
+		w.WriteHeader(http.StatusUnavailableForLegalReasons)
+		w.Write([]byte(`{"error":"This link has been blocked","code":"blocked"}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(option.WithBaseURL(srv.URL))
+	_, err := c.PublicStats(context.Background(), "scam", PublicStatsQuery{})
+	if !IsBlocked(err) {
+		t.Fatalf("err = %v, want IsBlocked", err)
+	}
+	if !errors.Is(err, ErrLinkBlocked) {
+		t.Fatalf("err = %v, want ErrLinkBlocked sentinel", err)
+	}
+	var apiErr *Error
+	if !errors.As(err, &apiErr) || apiErr.Code != "blocked" {
+		t.Fatalf("err = %v, want code blocked", err)
+	}
+	if IsBlocked(&Error{StatusCode: 404}) {
+		t.Fatal("404 must not read as blocked")
+	}
+}
+
+// An edge-composed 451 whose body is HTML still yields a usable code
+// via the X-Error-Code header fallback.
+func TestBlocked451EdgeComposedBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("X-Error-Code", "blocked")
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusUnavailableForLegalReasons)
+		w.Write([]byte(`<!doctype html><title>451</title>`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(option.WithBaseURL(srv.URL))
+	_, err := c.Me(context.Background())
+	var apiErr *Error
+	if !errors.As(err, &apiErr) || apiErr.Code != "blocked" || !IsBlocked(err) {
+		t.Fatalf("err = %v, want header-derived blocked code", err)
+	}
+}
+
 func TestIsRateLimitedRejectsOtherErrors(t *testing.T) {
 	if IsRateLimited(errors.New("nope")) {
 		t.Fatal("plain errors must not read as rate-limited")
@@ -65,11 +111,11 @@ func TestRefreshRejectionIsSessionExpired(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/auth/device/refresh" {
 			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte(`{"error":"invalid refresh token","code":"AUTHENTICATION_ERROR"}`))
+			w.Write([]byte(`{"error":"invalid refresh token","code":"authentication_error"}`))
 			return
 		}
 		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"error":"token expired","code":"AUTHENTICATION_ERROR"}`))
+		w.Write([]byte(`{"error":"token expired","code":"authentication_error"}`))
 	}))
 	defer srv.Close()
 
@@ -89,7 +135,7 @@ func TestRefreshRejectionIsSessionExpired(t *testing.T) {
 func TestPlain401IsNotSessionExpired(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"error":"authentication required","code":"AUTHENTICATION_ERROR"}`))
+		w.Write([]byte(`{"error":"authentication required","code":"authentication_error"}`))
 	}))
 	defer srv.Close()
 

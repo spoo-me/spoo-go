@@ -20,12 +20,34 @@ const (
 	retryMaxDelay = 10 * time.Second
 )
 
-// RetryableStatus reports whether a response status is worth retrying:
-// timeouts, rate limits, and server-side failures.
-func RetryableStatus(status int) bool {
-	return status == http.StatusRequestTimeout ||
-		status == http.StatusTooManyRequests ||
-		status >= 500
+// IdempotentMethod reports whether an HTTP method is safe to replay
+// unconditionally. The set matches the TS and Python SDKs exactly:
+// GET, PUT, DELETE.
+func IdempotentMethod(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodPut, http.MethodDelete:
+		return true
+	}
+	return false
+}
+
+// RetryableStatus reports whether a response status is worth retrying
+// for the given method. Idempotent methods retry on 408, 429, 500,
+// 502, 503 and 504. Non-idempotent methods (POST, PATCH) retry only on
+// 429 and 503, the statuses where the server provably did no work; a
+// replayed POST after a 500 or 504 could have created the resource
+// twice. The sets match the TS and Python SDKs exactly.
+func RetryableStatus(method string, status int) bool {
+	switch status {
+	case http.StatusTooManyRequests, http.StatusServiceUnavailable:
+		return true
+	case http.StatusRequestTimeout,
+		http.StatusInternalServerError,
+		http.StatusBadGateway,
+		http.StatusGatewayTimeout:
+		return IdempotentMethod(method)
+	}
+	return false
 }
 
 // RetryDelay computes the wait before retry number attempt+1. A

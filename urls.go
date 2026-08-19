@@ -60,6 +60,14 @@ type ListURLsOptions struct {
 	Search    string
 	Status    string // ACTIVE | INACTIVE | BLOCKED | EXPIRED
 	Domain    string
+	// CreatedAfter and CreatedBefore bound the creation time.
+	CreatedAfter  time.Time
+	CreatedBefore time.Time
+	// PasswordSet and MaxClicksSet are tri-state: omitted (the zero
+	// Opt) leaves the filter off, Set(true) keeps only links with the
+	// property, Set(false) only links without it.
+	PasswordSet  Opt[bool]
+	MaxClicksSet Opt[bool]
 }
 
 // ListURLs returns one page of the account's links; ListURLsAll
@@ -87,6 +95,18 @@ func (c *Client) ListURLs(ctx context.Context, opts ListURLsOptions) (*URLPage, 
 	}
 	if opts.Status != "" {
 		filter["status"] = opts.Status
+	}
+	if !opts.CreatedAfter.IsZero() {
+		filter["createdAfter"] = opts.CreatedAfter.UTC().Format(time.RFC3339)
+	}
+	if !opts.CreatedBefore.IsZero() {
+		filter["createdBefore"] = opts.CreatedBefore.UTC().Format(time.RFC3339)
+	}
+	if v, ok := opts.PasswordSet.Value(); ok {
+		filter["passwordSet"] = v
+	}
+	if v, ok := opts.MaxClicksSet.Value(); ok {
+		filter["maxClicksSet"] = v
 	}
 	if len(filter) > 0 {
 		data, err := json.Marshal(filter)

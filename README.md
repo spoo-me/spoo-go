@@ -169,7 +169,7 @@ metadata. Retrieve it with `errors.As`:
 | What you get | Where |
 | --- | --- |
 | HTTP status | `err.StatusCode` |
-| Machine-readable code | `err.Code` (open string enum, e.g. `CONFLICT_ERROR`) |
+| Machine-readable code | `err.Code` (lowercase snake_case, e.g. `conflict`, `not_found`, `blocked`; the one uppercase outlier is `EMAIL_NOT_VERIFIED`) |
 | Human-readable message | `err.Message`, plus `err.Field` on validation errors |
 | Request id for support | `err.RequestID` |
 | Rate-limit state | `err.RateLimit` (limit, remaining, reset, retry-after) |
@@ -182,13 +182,16 @@ Common branches have predicates and sentinels:
 | `spoo.IsRateLimited(err)` | 429: budget exhausted even after retries |
 | `errors.Is(err, spoo.ErrSessionExpired)` | the refresh token no longer works; log in again |
 | `errors.Is(err, spoo.ErrLinkPasswordProtected)` | the link's stats need the link password |
+| `spoo.IsBlocked(err)` | 451: the link was taken down by the safety pipeline |
 
 ## Retries
 
-Connection errors, 408, 429, and 5xx responses are retried twice by default
-with exponential backoff and jitter. A `Retry-After` header is authoritative
-when the server sends one. Configure with `option.WithMaxRetries(n)`; 0
-disables retries.
+Idempotent requests (GET, PUT, DELETE) are retried twice by default on
+connection errors and 408, 429, 500, 502, 503 and 504 responses, with
+exponential backoff and jitter. Requests that are not idempotent are only
+retried when the server provably did no work (429 and 503). A `Retry-After`
+header is authoritative when the server sends one. Configure with
+`option.WithMaxRetries(n)`; 0 disables retries.
 
 ## Pagination
 
@@ -247,7 +250,7 @@ file, or database, and rotated tokens persist through it.
 | `BulkDelete`, `BulkUpdateStatus`, `BulkUpdateExpiry`, `BulkMoveDomain` | `POST /api/v1/urls/bulk/*` |
 | `Stats`, `LinkStats`, `StatsByAlias` | `GET /api/v1/stats`, `GET /api/v1/stats/links/{id}` |
 | `PublicStats`, `PublicPreview` | `GET or POST /api/v1/public/stats/{code}`, `GET /api/v1/public/preview/{code}` |
-| `Export`, `ExportLink` | `GET /api/v1/export` |
+| `Export`, `ExportLink` | `GET /api/v1/export`, `GET /api/v1/export/links/{id}` |
 | `EmojiSet` | `GET /api/v1/emoji-set` (ETag-cached) |
 | `Me` | `GET /auth/me` |
 | `ExchangeDeviceCode`, `RefreshTokens`, `DeviceAuthURL` | `POST /auth/device/token`, `POST /auth/device/refresh` |

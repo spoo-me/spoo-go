@@ -64,7 +64,7 @@ func TestClientHeaderRejectsMalformedVersion(t *testing.T) {
 func TestDoParsesErrorEnvelope(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusConflict)
-		w.Write([]byte(`{"error":"alias already taken","code":"CONFLICT_ERROR","field":"alias"}`))
+		w.Write([]byte(`{"error":"alias already taken","code":"conflict","field":"alias"}`))
 	}))
 	defer srv.Close()
 
@@ -74,7 +74,7 @@ func TestDoParsesErrorEnvelope(t *testing.T) {
 	if !errors.As(err, &apiErr) {
 		t.Fatalf("err = %v, want *Error", err)
 	}
-	if apiErr.StatusCode != 409 || apiErr.Code != "CONFLICT_ERROR" || apiErr.Message != "alias already taken" {
+	if apiErr.StatusCode != 409 || apiErr.Code != "conflict" || apiErr.Message != "alias already taken" {
 		t.Fatalf("unexpected Error: %+v", apiErr)
 	}
 	if apiErr.Field != "alias" {
@@ -95,7 +95,7 @@ func TestDoRefreshesOn401AndRetries(t *testing.T) {
 			}
 			calls.Add(1)
 			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte(`{"error":"token expired","code":"AUTHENTICATION_ERROR"}`))
+			w.Write([]byte(`{"error":"token expired","code":"authentication_error"}`))
 		}
 	}))
 	defer srv.Close()

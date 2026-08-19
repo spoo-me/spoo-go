@@ -2,6 +2,7 @@ package spoo
 
 import (
 	"context"
+	"errors"
 	"maps"
 	"net/http"
 	"net/url"
@@ -107,8 +108,23 @@ func (r *StatsResponse) Points(dimension, metric string) []MetricPoint {
 	return out
 }
 
+// errPerLinkSlicing rejects aggregate-only filters on per-link calls.
+var errPerLinkSlicing = errors.New("spoo: the short_code and url_id filters are aggregate-only; the per-link endpoints already carry the link identity")
+
+// validatePerLink rejects the slicing filters the per-link endpoints
+// answer 422 to, before any request goes out.
+func (q StatsQuery) validatePerLink() error {
+	for _, key := range []string{"short_code", "url_id"} {
+		if len(q.Filters[key]) > 0 {
+			return errPerLinkSlicing
+		}
+	}
+	return nil
+}
+
 // Stats aggregates clicks across every link the account owns.
-// Auth is required — anonymous stats live on PublicStats.
+// Auth is required — anonymous stats live on PublicStats. The
+// short_code / url_id slicing filters apply here (and on Export) only.
 func (c *Client) Stats(ctx context.Context, q StatsQuery) (*StatsResponse, error) {
 	var out StatsResponse
 	if err := c.do(ctx, http.MethodGet, "/api/v1/stats", q.values(), nil, &out); err != nil {
@@ -119,8 +135,13 @@ func (c *Client) Stats(ctx context.Context, q StatsQuery) (*StatsResponse, error
 
 // LinkStats returns stats for one owned link by its url id (resolve an
 // alias with ResolveAlias first, or use StatsByAlias). Unknown and
-// foreign ids both 404.
+// foreign ids both 404. The short_code / url_id slicing filters are
+// rejected client-side: the endpoint 422s on them because the path
+// already picks the link.
 func (c *Client) LinkStats(ctx context.Context, urlID string, q StatsQuery) (*StatsResponse, error) {
+	if err := q.validatePerLink(); err != nil {
+		return nil, err
+	}
 	var out StatsResponse
 	path := "/api/v1/stats/links/" + url.PathEscape(urlID)
 	if err := c.do(ctx, http.MethodGet, path, q.values(), nil, &out); err != nil {

@@ -129,8 +129,9 @@ func (c *Client) request(ctx context.Context, method, path string, query url.Val
 }
 
 // send builds and performs one HTTP call, retrying transient failures
-// (connection errors, 408, 429, 5xx) with exponential backoff and
-// jitter, honoring Retry-After. Callers own the response body.
+// with exponential backoff and jitter, honoring Retry-After. What
+// counts as transient depends on the method: see
+// transport.RetryableStatus. Callers own the response body.
 func (c *Client) send(ctx context.Context, method, path string, query url.Values, body any, creds Credentials, extra http.Header) (*http.Response, error) {
 	u := c.base + path
 	if len(query) > 0 {
@@ -147,10 +148,12 @@ func (c *Client) send(ctx context.Context, method, path string, query url.Values
 	for attempt := 0; ; attempt++ {
 		resp, err := c.sendOnce(ctx, method, u, payload, creds, extra)
 		if err != nil {
-			if attempt >= c.maxRetries || ctx.Err() != nil {
+			// A dropped connection may have reached the server, so
+			// only idempotent methods replay on transport errors.
+			if !transport.IdempotentMethod(method) || attempt >= c.maxRetries || ctx.Err() != nil {
 				return nil, err
 			}
-		} else if !transport.RetryableStatus(resp.StatusCode) || attempt >= c.maxRetries {
+		} else if !transport.RetryableStatus(method, resp.StatusCode) || attempt >= c.maxRetries {
 			return resp, nil
 		}
 		var retryAfter string

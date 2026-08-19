@@ -23,8 +23,14 @@ var (
 
 	// ErrLinkPasswordProtected marks a 401 that is a property of the
 	// link, not of the session: the link's stats require the link
-	// password, which the SDK does not supply.
+	// password, supplied via PublicStatsQuery.Password.
 	ErrLinkPasswordProtected = errors.New("link is password protected")
+
+	// ErrLinkBlocked marks a 451: the link was taken down by the
+	// safety pipeline because its destination was flagged. This is a
+	// verdict on the link, not a transient failure — see also
+	// [IsBlocked].
+	ErrLinkBlocked = errors.New("link is blocked")
 )
 
 // ErrTokenSourceRequired is returned by [Client.ForceRefresh] when the
@@ -52,10 +58,13 @@ type RateLimit struct {
 type Error struct {
 	// StatusCode is the HTTP status of the response.
 	StatusCode int `json:"-"`
-	// Code is the backend's machine-readable error code, an open enum
-	// (e.g. "CONFLICT_ERROR", "AUTHENTICATION_ERROR"). Read from the
-	// body, with the X-Error-Code header as fallback for the
-	// edge-composed responses whose bodies carry no envelope.
+	// Code is the backend's machine-readable error code, an open
+	// string enum in lowercase snake_case: "conflict",
+	// "authentication_error", "not_found", "rate_limit_exceeded",
+	// "payload_too_large", "blocked", "gone", and so on. The one
+	// uppercase outlier is "EMAIL_NOT_VERIFIED". Read from the body,
+	// with the X-Error-Code header as fallback for the edge-composed
+	// responses whose bodies carry no envelope.
 	Code string `json:"code"`
 	// Message is the human-readable error message.
 	Message string `json:"error"`
@@ -97,6 +106,15 @@ func IsRateLimited(err error) bool {
 	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusTooManyRequests
 }
 
+// IsBlocked reports whether err is an API 451: the link was taken down
+// by the safety pipeline. Integrators should branch on this to tell
+// "the link was removed" apart from "something broke".
+// errors.Is(err, ErrLinkBlocked) reports the same condition.
+func IsBlocked(err error) bool {
+	var apiErr *Error
+	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusUnavailableForLegalReasons
+}
+
 // newError builds an *Error from an HTTP error response, consuming (but
 // not closing) the body.
 func newError(resp *http.Response) *Error {
@@ -108,11 +126,14 @@ func newError(resp *http.Response) *Error {
 	}
 	e.RequestID = resp.Header.Get("X-Request-ID")
 	e.RateLimit = parseRateLimit(resp.Header)
-	if resp.StatusCode == http.StatusUnauthorized {
+	switch resp.StatusCode {
+	case http.StatusUnauthorized:
 		switch resp.Header.Get("X-Error-Code") {
 		case "password_required", "invalid_password":
 			e.sentinel = ErrLinkPasswordProtected
 		}
+	case http.StatusUnavailableForLegalReasons:
+		e.sentinel = ErrLinkBlocked
 	}
 	return e
 }

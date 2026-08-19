@@ -218,7 +218,7 @@ func TestConcurrent401sRefreshOnce(t *testing.T) {
 				// A second spend of a rotated token is exactly the
 				// bug: fail the way the backend would.
 				w.WriteHeader(http.StatusUnauthorized)
-				w.Write([]byte(`{"error":"invalid refresh token","code":"AUTHENTICATION_ERROR"}`))
+				w.Write([]byte(`{"error":"invalid refresh token","code":"authentication_error"}`))
 				return
 			}
 			time.Sleep(50 * time.Millisecond) // widen the race window
@@ -229,7 +229,7 @@ func TestConcurrent401sRefreshOnce(t *testing.T) {
 				return
 			}
 			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte(`{"error":"token expired","code":"AUTHENTICATION_ERROR"}`))
+			w.Write([]byte(`{"error":"token expired","code":"authentication_error"}`))
 		}
 	}))
 	defer srv.Close()

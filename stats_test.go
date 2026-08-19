@@ -265,15 +265,16 @@ func TestExportFilenameParsing(t *testing.T) {
 	}
 }
 
-// Per-link exports slice the unified endpoint with url_id, not the
-// legacy /export/links/{id} path.
-func TestExportLinkSlicesUnifiedEndpoint(t *testing.T) {
+// Per-link exports hit the per-link route: only that route names the
+// download after the link, so aggregate exports of different links
+// would silently overwrite each other on disk.
+func TestExportLinkHitsPerLinkRoute(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/export" {
-			t.Errorf("path = %s, want the unified export endpoint", r.URL.Path)
+		if r.URL.Path != "/api/v1/export/links/65f0abc123" {
+			t.Errorf("path = %s, want the per-link export route", r.URL.Path)
 		}
-		if r.URL.Query().Get("url_id") != "65f0abc123" {
-			t.Errorf("url_id = %q", r.URL.Query().Get("url_id"))
+		if r.URL.Query().Has("url_id") {
+			t.Errorf("url_id must not ride the query: %v", r.URL.Query())
 		}
 		w.Header().Set("Content-Disposition", `attachment; filename="stats-launch.zip"`)
 		w.Write([]byte("FAKEZIP"))
@@ -292,17 +293,36 @@ func TestExportLinkSlicesUnifiedEndpoint(t *testing.T) {
 	}
 }
 
+// The per-link endpoints 422 on the aggregate slicing filters, so the
+// SDK rejects them before any request goes out.
+func TestPerLinkCallsRejectSlicingFilters(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Error("no request must be sent with aggregate-only filters")
+	}))
+	defer srv.Close()
+
+	c := NewClient(option.WithBaseURL(srv.URL))
+	sliced := StatsQuery{Filters: map[string][]string{"short_code": {"launch"}}}
+	if _, err := c.LinkStats(context.Background(), "65f0abc123", sliced); err == nil {
+		t.Fatal("LinkStats must reject short_code filters")
+	}
+	byID := StatsQuery{Filters: map[string][]string{"url_id": {"65f0abc123"}}}
+	if _, err := c.ExportLink(context.Background(), "65f0abc123", byID, "json"); err == nil {
+		t.Fatal("ExportLink must reject url_id filters")
+	}
+}
+
 func TestExportErrorMapsEnvelope(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(`{"error":"bad format","code":"VALIDATION_ERROR"}`))
+		w.Write([]byte(`{"error":"bad format","code":"validation_error"}`))
 	}))
 	defer srv.Close()
 
 	c := NewClient(option.WithBaseURL(srv.URL))
 	_, err := c.Export(context.Background(), StatsQuery{}, "bmp")
 	var apiErr *Error
-	if !errors.As(err, &apiErr) || apiErr.Code != "VALIDATION_ERROR" {
+	if !errors.As(err, &apiErr) || apiErr.Code != "validation_error" {
 		t.Fatalf("err = %v, want the parsed envelope", err)
 	}
 }

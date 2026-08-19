@@ -26,23 +26,29 @@ type ExportFile struct {
 // Export downloads account-wide stats in the given format (json, csv,
 // xlsx, xml). Auth is required — anonymous export no longer exists.
 // Slice to specific links with the short_code / url_id filters on
-// [StatsQuery].
+// [StatsQuery]; note the aggregate route reports a generic filename
+// regardless of slicing, so single-link exports belong on ExportLink.
 func (c *Client) Export(ctx context.Context, q StatsQuery, format string) (*ExportFile, error) {
-	return c.export(ctx, q.values(), format)
+	return c.export(ctx, "/api/v1/export", q.values(), format)
 }
 
-// ExportLink downloads one owned link's stats by its url id (resolve
-// an alias with ResolveAlias first). Unknown and foreign ids yield an
-// empty slice of that link, consistent with the slicing filters.
+// ExportLink downloads one owned link's stats by its url id via the
+// per-link route, whose server-suggested filename carries the link's
+// identity (the aggregate route names every download the same, so
+// saved files would silently overwrite each other). Resolve an alias
+// with ResolveAlias first; unknown and foreign ids both 404. The
+// short_code / url_id slicing filters are aggregate-only here too.
 func (c *Client) ExportLink(ctx context.Context, urlID string, q StatsQuery, format string) (*ExportFile, error) {
-	v := q.values()
-	v.Set("url_id", urlID)
-	return c.export(ctx, v, format)
+	if err := q.validatePerLink(); err != nil {
+		return nil, err
+	}
+	path := "/api/v1/export/links/" + url.PathEscape(urlID)
+	return c.export(ctx, path, q.values(), format)
 }
 
-func (c *Client) export(ctx context.Context, v url.Values, format string) (*ExportFile, error) {
+func (c *Client) export(ctx context.Context, path string, v url.Values, format string) (*ExportFile, error) {
 	v.Set("format", format)
-	resp, err := c.request(ctx, http.MethodGet, "/api/v1/export", v, nil)
+	resp, err := c.request(ctx, http.MethodGet, path, v, nil)
 	if err != nil {
 		return nil, err
 	}

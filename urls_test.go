@@ -26,6 +26,18 @@ func TestListURLsBuildsQueryAndFilter(t *testing.T) {
 		if filter["search"] != "launch" || filter["status"] != "ACTIVE" {
 			t.Errorf("unexpected filter: %v", filter)
 		}
+		if filter["createdAfter"] != "2026-01-01T00:00:00Z" {
+			t.Errorf("createdAfter = %v", filter["createdAfter"])
+		}
+		if filter["passwordSet"] != true {
+			t.Errorf("passwordSet = %v", filter["passwordSet"])
+		}
+		if filter["maxClicksSet"] != false {
+			t.Errorf("maxClicksSet = %v, want an explicit false", filter["maxClicksSet"])
+		}
+		if _, ok := filter["createdBefore"]; ok {
+			t.Errorf("createdBefore must be omitted when zero: %v", filter)
+		}
 		w.Write([]byte(`{"items":[{"id":"a1","alias":"launch","long_url":"https://x.com","created_at":"2026-06-01T10:00:00Z","expire_after":1781524800,"total_clicks":42,"status":"ACTIVE","password_set":false}],"page":2,"pageSize":50,"total":51,"hasNext":false}`))
 	}))
 	defer srv.Close()
@@ -33,6 +45,9 @@ func TestListURLsBuildsQueryAndFilter(t *testing.T) {
 	c := NewClient(option.WithBaseURL(srv.URL))
 	page, err := c.ListURLs(context.Background(), ListURLsOptions{
 		Page: 2, PageSize: 50, SortBy: "total_clicks", Search: "launch", Status: "ACTIVE",
+		CreatedAfter: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		PasswordSet:  Set(true),
+		MaxClicksSet: Set(false),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -109,7 +124,7 @@ func TestListURLsAllStopsOnEarlyBreak(t *testing.T) {
 func TestListURLsAllYieldsFetchError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
-		w.Write([]byte(`{"error":"nope","code":"AUTHORIZATION_ERROR"}`))
+		w.Write([]byte(`{"error":"nope","code":"forbidden"}`))
 	}))
 	defer srv.Close()
 

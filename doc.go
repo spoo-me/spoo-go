@@ -57,9 +57,11 @@
 //
 // # Retries
 //
-// Transient failures (connection errors, 408, 429, 5xx) are retried
-// twice by default with exponential backoff and jitter, honoring
-// Retry-After. Tune with option.WithMaxRetries.
+// Idempotent requests (GET, PUT, DELETE) are retried twice by default
+// on connection errors and 408, 429, 500, 502, 503 and 504, with
+// exponential backoff and jitter, honoring Retry-After. Requests that
+// are not idempotent are only retried when the server provably did no
+// work (429 and 503). Tune with option.WithMaxRetries.
 //
 // # Pagination
 //
