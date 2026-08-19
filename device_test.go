@@ -12,6 +12,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/spoo-me/spoo-go/option"
 )
 
 var verifierRe = regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)
@@ -45,7 +47,7 @@ func TestGenerateCodeVerifierShape(t *testing.T) {
 }
 
 func TestDeviceAuthURL(t *testing.T) {
-	c := NewClient(WithBaseURL("https://spoo.example"))
+	c := NewClient(option.WithBaseURL("https://spoo.example"))
 	verifier, err := GenerateCodeVerifier()
 	if err != nil {
 		t.Fatal(err)
@@ -81,7 +83,7 @@ func TestDeviceAuthURL(t *testing.T) {
 // An empty RedirectURI defers to the app's registered default and stays
 // off the URL entirely.
 func TestDeviceAuthURLOmitsEmptyRedirectURI(t *testing.T) {
-	c := NewClient(WithBaseURL("https://spoo.example"))
+	c := NewClient(option.WithBaseURL("https://spoo.example"))
 	raw := c.DeviceAuthURL(DeviceAuthParams{
 		AppID:         "my-app",
 		State:         "st4te",
@@ -107,7 +109,7 @@ func TestForceRefresh(t *testing.T) {
 	defer srv.Close()
 
 	source := StaticTokens("oldAT", "oldRT")
-	c := NewClient(WithBaseURL(srv.URL), WithTokenSource(source))
+	c := NewClient(option.WithBaseURL(srv.URL), option.WithTokenSource(source))
 	creds, err := c.ForceRefresh(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -125,7 +127,7 @@ func TestForceRefresh(t *testing.T) {
 }
 
 func TestForceRefreshWithoutSource(t *testing.T) {
-	c := NewClient(WithAPIKey("spoo_key"))
+	c := NewClient(option.WithAPIKey("spoo_key"))
 	if _, err := c.ForceRefresh(context.Background()); !errors.Is(err, ErrTokenSourceRequired) {
 		t.Fatalf("err = %v, want ErrTokenSourceRequired", err)
 	}
@@ -153,7 +155,7 @@ func TestExchangeDeviceCode(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	tok, err := c.ExchangeDeviceCode(context.Background(), "my-app", "onetimecode", "theverifier")
 	if err != nil {
 		t.Fatal(err)
@@ -192,7 +194,7 @@ func TestRefreshTokensSendsAppIDAndRotates(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL), WithTokenSource(StaticTokens("at1", "rt1")))
+	c := NewClient(option.WithBaseURL(srv.URL), option.WithTokenSource(StaticTokens("at1", "rt1")))
 	pair, err := c.RefreshTokens(context.Background(), "my-app", "rt1")
 	if err != nil {
 		t.Fatal(err)
@@ -233,7 +235,7 @@ func TestConcurrent401sRefreshOnce(t *testing.T) {
 	defer srv.Close()
 
 	source := StaticTokens("staleAT", "oldRT")
-	c := NewClient(WithBaseURL(srv.URL), WithTokenSource(source))
+	c := NewClient(option.WithBaseURL(srv.URL), option.WithTokenSource(source))
 
 	const goroutines = 10
 	errs := make([]error, goroutines)

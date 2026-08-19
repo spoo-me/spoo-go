@@ -9,6 +9,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/spoo-me/spoo-go/option"
 )
 
 func TestListURLsBuildsQueryAndFilter(t *testing.T) {
@@ -28,7 +30,7 @@ func TestListURLsBuildsQueryAndFilter(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	page, err := c.ListURLs(context.Background(), ListURLsOptions{
 		Page: 2, PageSize: 50, SortBy: "total_clicks", Search: "launch", Status: "ACTIVE",
 	})
@@ -66,7 +68,7 @@ func TestListURLsAllPagesLazily(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	var ids []string
 	for item, err := range c.ListURLsAll(context.Background(), ListURLsOptions{}) {
 		if err != nil {
@@ -90,7 +92,7 @@ func TestListURLsAllStopsOnEarlyBreak(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	for item, err := range c.ListURLsAll(context.Background(), ListURLsOptions{}) {
 		if err != nil {
 			t.Fatal(err)
@@ -111,7 +113,7 @@ func TestListURLsAllYieldsFetchError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	var got error
 	for _, err := range c.ListURLsAll(context.Background(), ListURLsOptions{}) {
 		got = err
@@ -131,7 +133,7 @@ func TestGetURL(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	u, err := c.GetURL(context.Background(), "65f0abc123")
 	if err != nil {
 		t.Fatal(err)
@@ -149,7 +151,7 @@ func TestResolveAliasEscapesPath(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	u, err := c.ResolveAlias(context.Background(), "🚀", "spoo.me")
 	if err != nil {
 		t.Fatal(err)
@@ -172,7 +174,7 @@ func TestResolveAliasRequiresDomain(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	if _, err := c.ResolveAlias(context.Background(), "launch", ""); err == nil {
 		t.Fatal("want an error for the missing domain")
 	}
@@ -185,7 +187,7 @@ func TestResolveAliasNotFound(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	_, err := c.ResolveAlias(context.Background(), "nope", "spoo.me")
 	if !IsNotFound(err) {
 		t.Fatalf("err = %v, want IsNotFound", err)
@@ -202,7 +204,7 @@ func TestResolveAliasCustomDomain(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	if _, err := c.ResolveAlias(context.Background(), "promo", "links.example.com"); err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +227,7 @@ func TestUpdateURLSendsPatch(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	res, err := c.UpdateURL(context.Background(), "abc123", UpdateURLParams{Status: "INACTIVE"})
 	if err != nil {
 		t.Fatal(err)
@@ -248,7 +250,7 @@ func TestUpdateURLTriState(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	_, err := c.UpdateURL(context.Background(), "abc123", UpdateURLParams{
 		LongURL:     "https://example.com/new",
 		Password:    Null[string](),                                   // remove protection
@@ -299,7 +301,7 @@ func TestSetURLStatus(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	res, err := c.SetURLStatus(context.Background(), "abc123", "INACTIVE")
 	if err != nil {
 		t.Fatal(err)
@@ -321,7 +323,7 @@ func TestDeleteURLsByDomain(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	res, err := c.DeleteURLsByDomain(context.Background(), "links.example.com")
 	if err != nil {
 		t.Fatal(err)
@@ -344,7 +346,7 @@ func TestURLItemShortURLDerived(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	page, err := c.ListURLs(context.Background(), ListURLsOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -366,7 +368,7 @@ func TestShortURLDerivedOnGetAndResolve(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	got, err := c.GetURL(context.Background(), "65f0abc123")
 	if err != nil {
 		t.Fatal(err)
@@ -392,7 +394,7 @@ func TestDeleteURL(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	if err := c.DeleteURL(context.Background(), "abc123"); err != nil {
 		t.Fatal(err)
 	}

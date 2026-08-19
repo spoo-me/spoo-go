@@ -9,6 +9,7 @@ import (
 	"time"
 
 	spoo "github.com/spoo-me/spoo-go"
+	"github.com/spoo-me/spoo-go/option"
 )
 
 // Construct a client for the hosted API with an API key. All options
@@ -16,15 +17,15 @@ import (
 // public endpoints, and WithBaseURL points at a self-hosted instance.
 func ExampleNewClient() {
 	client := spoo.NewClient(
-		spoo.WithAPIKey(os.Getenv("SPOO_API_KEY")),
-		spoo.WithMaxRetries(3),
+		option.WithAPIKey(os.Getenv("SPOO_API_KEY")),
+		option.WithMaxRetries(3),
 	)
 	_ = client
 }
 
 // Shorten a link with an alias, a password, and an expiry.
 func ExampleClient_Shorten() {
-	client := spoo.NewClient(spoo.WithAPIKey(os.Getenv("SPOO_API_KEY")))
+	client := spoo.NewClient(option.WithAPIKey(os.Getenv("SPOO_API_KEY")))
 
 	link, err := client.Shorten(context.Background(), spoo.ShortenRequest{
 		LongURL:     "https://example.com/launch",
@@ -41,7 +42,7 @@ func ExampleClient_Shorten() {
 // Iterate every link in the account; pages are fetched lazily as the
 // loop advances.
 func ExampleClient_ListURLsAll() {
-	client := spoo.NewClient(spoo.WithAPIKey(os.Getenv("SPOO_API_KEY")))
+	client := spoo.NewClient(option.WithAPIKey(os.Getenv("SPOO_API_KEY")))
 
 	for link, err := range client.ListURLsAll(context.Background(), spoo.ListURLsOptions{
 		SortBy: "total_clicks",
@@ -56,7 +57,7 @@ func ExampleClient_ListURLsAll() {
 // Patch a link. Omitted fields keep their current setting, spoo.Null
 // clears one, and spoo.Set replaces it.
 func ExampleClient_UpdateURL() {
-	client := spoo.NewClient(spoo.WithAPIKey(os.Getenv("SPOO_API_KEY")))
+	client := spoo.NewClient(option.WithAPIKey(os.Getenv("SPOO_API_KEY")))
 
 	updated, err := client.UpdateURL(context.Background(), "507f1f77bcf86cd799439011", spoo.UpdateURLParams{
 		LongURL:     "https://example.com/moved",
@@ -71,7 +72,7 @@ func ExampleClient_UpdateURL() {
 
 // Branch on API errors with errors.As and the typed predicates.
 func Example_errorHandling() {
-	client := spoo.NewClient(spoo.WithAPIKey(os.Getenv("SPOO_API_KEY")))
+	client := spoo.NewClient(option.WithAPIKey(os.Getenv("SPOO_API_KEY")))
 
 	_, err := client.ResolveAlias(context.Background(), "launch", "spoo.me")
 	switch {
@@ -126,7 +127,7 @@ func Example_deviceFlow() {
 	// Hand the pair to a client via a TokenSource; refresh and
 	// rotation persistence happen automatically from here.
 	authed := spoo.NewClient(
-		spoo.WithTokenSource(spoo.StaticTokens(tokens.AccessToken, tokens.RefreshToken)),
+		option.WithTokenSource(spoo.StaticTokens(tokens.AccessToken, tokens.RefreshToken)),
 	)
 	_ = authed
 }

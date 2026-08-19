@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/spoo-me/spoo-go/option"
 )
 
 func TestErrorParsesRateLimitAndRequestID(t *testing.T) {
@@ -21,7 +23,7 @@ func TestErrorParsesRateLimitAndRequestID(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL), WithMaxRetries(0))
+	c := NewClient(option.WithBaseURL(srv.URL), option.WithMaxRetries(0))
 	_, err := c.Me(context.Background())
 	if !IsRateLimited(err) {
 		t.Fatalf("err = %v, want IsRateLimited", err)
@@ -71,7 +73,7 @@ func TestRefreshRejectionIsSessionExpired(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL), WithTokenSource(StaticTokens("deadAT", "deadRT")))
+	c := NewClient(option.WithBaseURL(srv.URL), option.WithTokenSource(StaticTokens("deadAT", "deadRT")))
 	_, err := c.Me(context.Background())
 	if !errors.Is(err, ErrSessionExpired) {
 		t.Fatalf("err = %v, want ErrSessionExpired", err)
@@ -91,7 +93,7 @@ func TestPlain401IsNotSessionExpired(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL), WithAPIKey("spoo_bad"))
+	c := NewClient(option.WithBaseURL(srv.URL), option.WithAPIKey("spoo_bad"))
 	_, err := c.Me(context.Background())
 	if errors.Is(err, ErrSessionExpired) || errors.Is(err, ErrLinkPasswordProtected) {
 		t.Fatalf("err = %v, want no sentinel on a plain 401", err)

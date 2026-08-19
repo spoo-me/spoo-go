@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/spoo-me/spoo-go/option"
 )
 
 func TestMe(t *testing.T) {
@@ -13,7 +15,7 @@ func TestMe(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	u, err := c.Me(context.Background())
 	if err != nil {
 		t.Fatal(err)

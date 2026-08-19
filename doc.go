@@ -8,8 +8,11 @@
 //
 // # Quickstart
 //
+// Construction options live in the option subpackage
+// (github.com/spoo-me/spoo-go/option):
+//
 //	client := spoo.NewClient(
-//		spoo.WithAPIKey(os.Getenv("SPOO_API_KEY")),
+//		option.WithAPIKey(os.Getenv("SPOO_API_KEY")),
 //	)
 //
 //	link, err := client.Shorten(ctx, spoo.ShortenRequest{
@@ -26,11 +29,12 @@
 // legitimate for the public endpoints (shorten, public stats and
 // previews, the emoji set):
 //
-//   - WithAPIKey: a spoo_... API key (CI, servers).
-//   - WithTokenSource(StaticTokens(access, refresh)): a JWT pair from
-//     the connected-apps device flow. Refresh and rotation are handled
-//     automatically; implement your own [TokenSource] to persist
-//     rotated tokens (a keyring, a file, a database).
+//   - option.WithAPIKey: a spoo_... API key (CI, servers).
+//   - option.WithTokenSource(spoo.StaticTokens(access, refresh)): a
+//     JWT pair from the connected-apps device flow. Refresh and
+//     rotation are handled automatically; implement your own
+//     [TokenSource] to persist rotated tokens (a keyring, a file, a
+//     database).
 //   - Nothing: anonymous.
 //
 // # Errors
@@ -55,7 +59,7 @@
 //
 // Transient failures (connection errors, 408, 429, 5xx) are retried
 // twice by default with exponential backoff and jitter, honoring
-// Retry-After. Tune with [WithMaxRetries].
+// Retry-After. Tune with option.WithMaxRetries.
 //
 // # Pagination
 //

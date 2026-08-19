@@ -9,11 +9,16 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/spoo-me/spoo-go/internal/requestconfig"
+	"github.com/spoo-me/spoo-go/internal/transport"
+	"github.com/spoo-me/spoo-go/option"
 )
 
-// DefaultBaseURL is the hosted spoo.me API; see [WithBaseURL] for
+// DefaultBaseURL is the hosted spoo.me API; see option.WithBaseURL for
 // self-hosted deployments.
 const DefaultBaseURL = "https://spoo.me"
 
@@ -43,44 +48,32 @@ type Client struct {
 }
 
 // NewClient returns a Client for the hosted spoo.me API, anonymous
-// unless an auth option is given. See [Option] for configuration.
-func NewClient(opts ...Option) *Client {
-	c := &Client{
-		base:       DefaultBaseURL,
-		maxRetries: defaultMaxRetries,
-		retryBase:  retryBaseDelay,
+// unless an auth option is given. See the option package for
+// configuration.
+func NewClient(opts ...option.RequestOption) *Client {
+	cfg := requestconfig.Config{
+		BaseURL:    DefaultBaseURL,
+		MaxRetries: defaultMaxRetries,
 	}
 	for _, opt := range opts {
-		opt(c)
+		opt(&cfg)
+	}
+	c := &Client{
+		base:       strings.TrimRight(cfg.BaseURL, "/"),
+		tokens:     cfg.Tokens,
+		maxRetries: max(cfg.MaxRetries, 0),
+		clientTag:  cfg.ClientTag,
+		retryBase:  transport.RetryBaseDelay,
 	}
 	if c.clientTag == "" {
 		c.clientTag = defaultClientTag()
 	}
-	if c.http == nil {
-		c.http = &http.Client{Timeout: 30 * time.Second}
+	hc := cfg.HTTPClient
+	if hc == nil {
+		hc = &http.Client{Timeout: 30 * time.Second}
 	}
-	c.http = withRedirectHeaderStrip(c.http)
+	c.http = transport.WithRedirectHeaderStrip(hc)
 	return c
-}
-
-// withRedirectHeaderStrip copies hc and extends its redirect policy: Go
-// forwards custom headers on redirects, including cross-origin ones.
-// Attribution belongs to the spoo API only, so X-Spoo-Client is dropped
-// whenever a redirect leaves the original host. Go itself strips
-// Authorization on cross-domain hops.
-func withRedirectHeaderStrip(hc *http.Client) *http.Client {
-	cp := *hc
-	next := hc.CheckRedirect
-	cp.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		if req.URL.Host != via[0].URL.Host {
-			req.Header.Del("X-Spoo-Client")
-		}
-		if next != nil {
-			return next(req, via)
-		}
-		return nil
-	}
-	return &cp
 }
 
 // credentials returns the current credentials, or the anonymous zero
@@ -157,15 +150,15 @@ func (c *Client) send(ctx context.Context, method, path string, query url.Values
 			if attempt >= c.maxRetries || ctx.Err() != nil {
 				return nil, err
 			}
-		} else if !retryableStatus(resp.StatusCode) || attempt >= c.maxRetries {
+		} else if !transport.RetryableStatus(resp.StatusCode) || attempt >= c.maxRetries {
 			return resp, nil
 		}
 		var retryAfter string
 		if resp != nil {
 			retryAfter = resp.Header.Get("Retry-After")
-			drain(resp)
+			transport.Drain(resp)
 		}
-		if err := sleep(ctx, c.retryDelay(attempt, retryAfter)); err != nil {
+		if err := transport.Sleep(ctx, transport.RetryDelay(c.retryBase, attempt, retryAfter)); err != nil {
 			return nil, err
 		}
 	}
@@ -185,7 +178,7 @@ func (c *Client) sendOnce(ctx context.Context, method, u string, payload []byte,
 	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if bearer := creds.bearer(); bearer != "" {
+	if bearer := creds.Bearer(); bearer != "" {
 		req.Header.Set("Authorization", "Bearer "+bearer)
 	}
 	for name, values := range extra {

@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/spoo-me/spoo-go/option"
 )
 
 // fastRetries makes backoff negligible so retry tests run instantly.
@@ -26,7 +28,7 @@ func TestRetriesTransient5xxThenSucceeds(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	fastRetries(c)
 	u, err := c.Me(context.Background())
 	if err != nil {
@@ -49,7 +51,7 @@ func TestRetriesExhaustedReturnTheError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL), WithMaxRetries(2))
+	c := NewClient(option.WithBaseURL(srv.URL), option.WithMaxRetries(2))
 	fastRetries(c)
 	_, err := c.Me(context.Background())
 	var apiErr *Error
@@ -70,7 +72,7 @@ func TestNoRetryOnClientError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	fastRetries(c)
 	if _, err := c.Me(context.Background()); err == nil {
 		t.Fatal("want error")
@@ -88,7 +90,7 @@ func TestWithMaxRetriesZeroDisablesRetries(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL), WithMaxRetries(0))
+	c := NewClient(option.WithBaseURL(srv.URL), option.WithMaxRetries(0))
 	fastRetries(c)
 	if _, err := c.Me(context.Background()); err == nil {
 		t.Fatal("want error")
@@ -113,7 +115,7 @@ func TestRetryHonorsRetryAfter(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	c.retryBase = time.Hour // would hang the test if backoff were used
 	start := time.Now()
 	if _, err := c.Me(context.Background()); err != nil {
@@ -148,7 +150,7 @@ func TestRetriesConnectionErrors(t *testing.T) {
 	defer srv.Close()
 
 	hc := &http.Client{Transport: &failOnceTransport{next: http.DefaultTransport}}
-	c := NewClient(WithBaseURL(srv.URL), WithHTTPClient(hc))
+	c := NewClient(option.WithBaseURL(srv.URL), option.WithHTTPClient(hc))
 	fastRetries(c)
 	if _, err := c.Me(context.Background()); err != nil {
 		t.Fatalf("connection error was not retried: %v", err)
@@ -171,7 +173,7 @@ func TestRetryReplaysRequestBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	fastRetries(c)
 	if _, err := c.Shorten(context.Background(), ShortenRequest{LongURL: "https://example.com"}); err != nil {
 		t.Fatal(err)
@@ -187,7 +189,7 @@ func TestRetryStopsOnContextCancel(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	c.retryBase = time.Hour
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()

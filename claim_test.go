@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/spoo-me/spoo-go/option"
 )
 
 // Claims resolve independently: partial success is data, not an error.
@@ -33,7 +35,7 @@ func TestClaimURLsPartialSuccess(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL), WithAPIKey("spoo_key"))
+	c := NewClient(option.WithBaseURL(srv.URL), option.WithAPIKey("spoo_key"))
 	out, err := c.ClaimURLs(context.Background(), []Claim{
 		{URLID: "65f0abc123", Token: "claimtok-claimtok-claimtok-claimtok-claimtok"},
 		{URLID: "65f0abc124", Token: "wrong-token-wrong-token-wrong-token-wrong-tok"},

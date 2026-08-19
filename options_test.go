@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/spoo-me/spoo-go/option"
 )
 
 func TestWithAPIKeySendsBearer(t *testing.T) {
@@ -16,7 +18,7 @@ func TestWithAPIKeySendsBearer(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL), WithAPIKey("spoo_testkey"))
+	c := NewClient(option.WithBaseURL(srv.URL), option.WithAPIKey("spoo_testkey"))
 	if _, err := c.Me(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +35,7 @@ func TestEmptyAPIKeyStaysAnonymous(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL), WithAPIKey(""))
+	c := NewClient(option.WithBaseURL(srv.URL), option.WithAPIKey(""))
 	if err := c.do(context.Background(), http.MethodGet, "/api/v1/shorten/check-alias", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +51,7 @@ func TestTokenSourceErrorAborts(t *testing.T) {
 	defer srv.Close()
 
 	wantErr := errors.New("keyring locked")
-	c := NewClient(WithBaseURL(srv.URL), WithTokenSource(failingSource{err: wantErr}))
+	c := NewClient(option.WithBaseURL(srv.URL), option.WithTokenSource(failingSource{err: wantErr}))
 	if _, err := c.Me(context.Background()); !errors.Is(err, wantErr) {
 		t.Fatalf("err = %v, want the token-source error", err)
 	}
@@ -71,7 +73,7 @@ func TestWithClientTagOverridesDefault(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL), WithClientTag("cli/1.4.0"))
+	c := NewClient(option.WithBaseURL(srv.URL), option.WithClientTag("cli/1.4.0"))
 	if err := c.do(context.Background(), http.MethodGet, "/auth/me", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +104,7 @@ func TestWithHTTPClientKeepsRedirectStrip(t *testing.T) {
 			return nil
 		},
 	}
-	c := NewClient(WithBaseURL(redirector.URL), WithHTTPClient(hc))
+	c := NewClient(option.WithBaseURL(redirector.URL), option.WithHTTPClient(hc))
 	if err := c.do(context.Background(), http.MethodGet, "/start", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}

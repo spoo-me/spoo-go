@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+
+	"github.com/spoo-me/spoo-go/option"
 )
 
 func TestDoSendsBearerToken(t *testing.T) {
@@ -17,7 +19,7 @@ func TestDoSendsBearerToken(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL), WithTokenSource(StaticTokens("tok123", "rt")))
+	c := NewClient(option.WithBaseURL(srv.URL), option.WithTokenSource(StaticTokens("tok123", "rt")))
 	if err := c.do(context.Background(), http.MethodGet, "/auth/me", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +36,7 @@ func TestDoSendsClientHeader(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	if err := c.do(context.Background(), http.MethodGet, "/auth/me", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +68,7 @@ func TestDoParsesErrorEnvelope(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	err := c.do(context.Background(), http.MethodPost, "/api/v1/shorten", nil, map[string]string{}, nil)
 	var apiErr *Error
 	if !errors.As(err, &apiErr) {
@@ -99,7 +101,7 @@ func TestDoRefreshesOn401AndRetries(t *testing.T) {
 	defer srv.Close()
 
 	source := StaticTokens("staleAT", "oldRT")
-	c := NewClient(WithBaseURL(srv.URL), WithTokenSource(source))
+	c := NewClient(option.WithBaseURL(srv.URL), option.WithTokenSource(source))
 	if err := c.do(context.Background(), http.MethodGet, "/auth/me", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +131,7 @@ func TestClientHeaderStrippedOnCrossOriginRedirect(t *testing.T) {
 	}))
 	defer redirector.Close()
 
-	c := NewClient(WithBaseURL(redirector.URL))
+	c := NewClient(option.WithBaseURL(redirector.URL))
 	if err := c.do(context.Background(), http.MethodGet, "/start", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +152,7 @@ func TestClientHeaderKeptOnSameHostRedirect(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	if err := c.do(context.Background(), http.MethodGet, "/start", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +179,7 @@ func TestDo401PasswordRequiredSkipsRefresh(t *testing.T) {
 	defer srv.Close()
 
 	source := StaticTokens("goodAT", "goodRT")
-	c := NewClient(WithBaseURL(srv.URL), WithTokenSource(source))
+	c := NewClient(option.WithBaseURL(srv.URL), option.WithTokenSource(source))
 	err := c.do(context.Background(), http.MethodGet, "/api/v1/public/stats/secret", nil, nil, nil)
 	if !errors.Is(err, ErrLinkPasswordProtected) {
 		t.Fatalf("err = %v, want ErrLinkPasswordProtected", err)

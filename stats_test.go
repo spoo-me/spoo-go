@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/spoo-me/spoo-go/option"
 )
 
 func TestStatsQueryAndDecode(t *testing.T) {
@@ -38,7 +40,7 @@ func TestStatsQueryAndDecode(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	res, err := c.Stats(context.Background(), StatsQuery{
 		StartDate: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
 		GroupBy:   []string{"time", "browser"},
@@ -79,7 +81,7 @@ func TestLinkStatsHitsPerLinkPath(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	res, err := c.LinkStats(context.Background(), "65f0abc123", StatsQuery{GroupBy: []string{"time"}})
 	if err != nil {
 		t.Fatal(err)
@@ -103,7 +105,7 @@ func TestStatsByAlias(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	res, err := c.StatsByAlias(context.Background(), "launch", "spoo.me", StatsQuery{})
 	if err != nil {
 		t.Fatal(err)
@@ -140,7 +142,7 @@ func TestPublicStatsReturnsEnvelope(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	res, err := c.PublicStats(context.Background(), "launch", PublicStatsQuery{
 		StartDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 		Timezone:  "UTC",
@@ -185,7 +187,7 @@ func TestPublicStatsPasswordGoesInPOSTBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	res, err := c.PublicStats(context.Background(), "secret", PublicStatsQuery{
 		Timezone: "UTC",
 		Password: "hunter22",
@@ -207,7 +209,7 @@ func TestPublicStatsWrongPassword(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	_, err := c.PublicStats(context.Background(), "secret", PublicStatsQuery{Password: "wrong"})
 	if !errors.Is(err, ErrLinkPasswordProtected) {
 		t.Fatalf("err = %v, want ErrLinkPasswordProtected", err)
@@ -228,7 +230,7 @@ func TestExportStreamsFilenameAndBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	file, err := c.Export(context.Background(), StatsQuery{}, "xlsx")
 	if err != nil {
 		t.Fatal(err)
@@ -278,7 +280,7 @@ func TestExportLinkSlicesUnifiedEndpoint(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	file, err := c.ExportLink(context.Background(), "65f0abc123", StatsQuery{}, "csv")
 	if err != nil {
 		t.Fatal(err)
@@ -297,7 +299,7 @@ func TestExportErrorMapsEnvelope(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	_, err := c.Export(context.Background(), StatsQuery{}, "bmp")
 	var apiErr *Error
 	if !errors.As(err, &apiErr) || apiErr.Code != "VALIDATION_ERROR" {

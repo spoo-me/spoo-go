@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/spoo-me/spoo-go/option"
 )
 
 func TestPublicPreview(t *testing.T) {
@@ -28,7 +30,7 @@ func TestPublicPreview(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	p, err := c.PublicPreview(context.Background(), "🚀")
 	if err != nil {
 		t.Fatal(err)
@@ -57,7 +59,7 @@ func TestPublicPreviewWithheldDestination(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	p, err := c.PublicPreview(context.Background(), "gone")
 	if err != nil {
 		t.Fatal(err)

@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+
+	"github.com/spoo-me/spoo-go/option"
 )
 
 // The emoji set is served from the client cache on 304: the second call
@@ -31,7 +33,7 @@ func TestEmojiSetETagCache(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	first, err := c.EmojiSet(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -59,7 +61,7 @@ func TestEmojiSetCacheInvalidation(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	c.emojiETag, c.emojiCache = `"v1"`, &EmojiSet{AcceptMaxVersion: 15.1}
 	set, err := c.EmojiSet(context.Background())
 	if err != nil {

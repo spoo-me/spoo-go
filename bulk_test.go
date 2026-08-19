@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/spoo-me/spoo-go/option"
 )
 
 // Bulk ops answer HTTP 200 even when every item fails; outcomes are
@@ -27,7 +29,7 @@ func TestBulkDeleteAllFailuresIsNotAnError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL), WithAPIKey("spoo_key"))
+	c := NewClient(option.WithBaseURL(srv.URL), option.WithAPIKey("spoo_key"))
 	res, err := c.BulkDelete(context.Background(), []string{"a", "b"})
 	if err != nil {
 		t.Fatal(err)
@@ -48,7 +50,7 @@ func TestBulkUpdateStatusBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	res, err := c.BulkUpdateStatus(context.Background(), []string{"a"}, "INACTIVE")
 	if err != nil {
 		t.Fatal(err)
@@ -72,7 +74,7 @@ func TestBulkUpdateExpiryWire(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	when := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
 	if _, err := c.BulkUpdateExpiry(context.Background(), []string{"a"}, when); err != nil {
 		t.Fatal(err)
@@ -99,7 +101,7 @@ func TestBulkMoveDomainWire(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL))
+	c := NewClient(option.WithBaseURL(srv.URL))
 	if _, err := c.BulkMoveDomain(context.Background(), []string{"a"}, "links.example.com"); err != nil {
 		t.Fatal(err)
 	}

@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/spoo-me/spoo-go/internal/transport"
 )
 
 // Sentinel conditions the API signals on 401 responses. A 401 means one
@@ -122,21 +124,6 @@ func parseRateLimit(h http.Header) RateLimit {
 	if epoch, err := strconv.ParseInt(h.Get("X-RateLimit-Reset"), 10, 64); err == nil {
 		rl.Reset = time.Unix(epoch, 0)
 	}
-	rl.RetryAfter, _ = parseRetryAfter(h.Get("Retry-After"), time.Now())
+	rl.RetryAfter, _ = transport.ParseRetryAfter(h.Get("Retry-After"), time.Now())
 	return rl
-}
-
-// parseRetryAfter reads a Retry-After header value — delay seconds or an
-// HTTP date (RFC 9110 §10.2.3). ok is false when absent or malformed.
-func parseRetryAfter(v string, now time.Time) (_ time.Duration, ok bool) {
-	if v == "" {
-		return 0, false
-	}
-	if secs, err := strconv.Atoi(v); err == nil {
-		return max(time.Duration(secs)*time.Second, 0), true
-	}
-	if at, err := http.ParseTime(v); err == nil {
-		return max(at.Sub(now), 0), true
-	}
-	return 0, false
 }

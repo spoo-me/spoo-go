@@ -3,9 +3,10 @@ package spoo
 import (
 	"context"
 	"io"
-	"mime"
 	"net/http"
 	"net/url"
+
+	"github.com/spoo-me/spoo-go/internal/transport"
 )
 
 // ExportFile is a streamed export download. The caller owns Body and
@@ -56,14 +57,12 @@ func (c *Client) export(ctx context.Context, v url.Values, format string) (*Expo
 	}, nil
 }
 
-// exportFilename extracts the filename from a Content-Disposition
-// header. mime.ParseMediaType decodes RFC 2231/5987 extended params, so
-// filename* surfaces under the "filename" key already decoded.
+// exportFilename resolves the download name: the server-suggested
+// Content-Disposition filename when present, else a synthesized
+// spoo-export name.
 func exportFilename(disposition, format string) string {
-	if _, params, err := mime.ParseMediaType(disposition); err == nil {
-		if name := params["filename"]; name != "" {
-			return name
-		}
+	if name, ok := transport.ContentDispositionFilename(disposition); ok {
+		return name
 	}
 	if format == "csv" {
 		return "spoo-export.zip" // csv arrives zipped, one CSV per dimension
