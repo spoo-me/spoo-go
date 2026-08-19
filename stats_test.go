@@ -250,11 +250,15 @@ func TestExportStreamsFilenameAndBody(t *testing.T) {
 
 // RFC 5987 extended filenames decode; the plain parameter is the
 // fallback and a bare header falls back to a synthesized name.
+// Path-shaped suggestions never survive: relative traversal reduces to
+// its basename and absolute paths fall back to the synthesized name.
 func TestExportFilenameParsing(t *testing.T) {
 	for disposition, want := range map[string]string{
 		`attachment; filename*=UTF-8''sp%C3%B6%C3%B6-export.zip`: "spöö-export.zip",
 		`attachment; filename="plain.json"`:                      "plain.json",
 		``:                                                       "spoo-export.zip",
+		`attachment; filename="../../../evil.zip"`:      "evil.zip",
+		`attachment; filename="/tmp/absolute-evil.zip"`: "spoo-export.zip",
 	} {
 		if got := exportFilename(disposition, "csv"); got != want {
 			t.Errorf("exportFilename(%q) = %q, want %q", disposition, got, want)

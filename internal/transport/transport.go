@@ -10,6 +10,7 @@ import (
 	"mime"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -123,12 +124,50 @@ func WithRedirectHeaderStrip(hc *http.Client) *http.Client {
 // ContentDispositionFilename extracts the filename from a
 // Content-Disposition header. mime.ParseMediaType decodes RFC 2231/5987
 // extended params, so filename* surfaces under the "filename" key
-// already decoded. ok is false when the header carries no usable name.
+// already decoded. The decoded value is server-supplied and consumers
+// hand it to os.Create, so it is sanitized to a bare name before it is
+// returned; ok is false when the header carries no usable name.
 func ContentDispositionFilename(disposition string) (string, bool) {
 	if _, params, err := mime.ParseMediaType(disposition); err == nil {
 		if name := params["filename"]; name != "" {
-			return name, true
+			return sanitizeFilename(name)
 		}
 	}
 	return "", false
+}
+
+// sanitizeFilename reduces a server-suggested download name to a bare
+// filename: everything up to the last '/' or '\' is stripped by hand
+// (filepath.Base is platform-dependent, and a Windows separator is just
+// as hostile when the consumer runs on Windows), absolute paths are
+// rejected outright, and so is anything that reduces to "", "." or
+// "..". ok is false on rejection; callers fall back to their
+// synthesized default name.
+func sanitizeFilename(name string) (string, bool) {
+	if isAbsolutePath(name) {
+		return "", false
+	}
+	if i := strings.LastIndexAny(name, `/\`); i >= 0 {
+		name = name[i+1:]
+	}
+	switch name {
+	case "", ".", "..":
+		return "", false
+	}
+	return name, true
+}
+
+// isAbsolutePath reports whether name is absolute on any platform:
+// a Unix root, a Windows separator-rooted path (including \\host UNC),
+// or a Windows drive-letter path.
+func isAbsolutePath(name string) bool {
+	if name == "" {
+		return false
+	}
+	if name[0] == '/' || name[0] == '\\' {
+		return true
+	}
+	c := name[0]
+	return len(name) >= 2 && name[1] == ':' &&
+		(('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z'))
 }

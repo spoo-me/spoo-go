@@ -13,8 +13,10 @@ import (
 // must Close it.
 type ExportFile struct {
 	// Filename is the server-suggested name from Content-Disposition
-	// (RFC 5987 filename* preferred, plain filename fallback), or a
-	// spoo-export.<ext> default when the header is absent.
+	// (RFC 5987 filename* preferred, plain filename fallback), reduced
+	// to a bare filename so it is safe to hand to os.Create, or a
+	// spoo-export.<ext> default when the header is absent or its name
+	// is path-shaped.
 	Filename string
 	// ContentType is the response media type.
 	ContentType string
@@ -64,8 +66,8 @@ func (c *Client) export(ctx context.Context, path string, v url.Values, format s
 }
 
 // exportFilename resolves the download name: the server-suggested
-// Content-Disposition filename when present, else a synthesized
-// spoo-export name.
+// Content-Disposition filename when present and sanitized to a bare
+// name, else a synthesized spoo-export name.
 func exportFilename(disposition, format string) string {
 	if name, ok := transport.ContentDispositionFilename(disposition); ok {
 		return name
