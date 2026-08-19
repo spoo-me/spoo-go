@@ -26,7 +26,7 @@ func TestShorten(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, nil)
+	c := NewClient(WithBaseURL(srv.URL))
 	res, err := c.Shorten(context.Background(), ShortenRequest{LongURL: "https://example.com", Alias: "mylink"})
 	if err != nil {
 		t.Fatal(err)
@@ -48,7 +48,7 @@ func TestCheckAlias(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, nil)
+	c := NewClient(WithBaseURL(srv.URL))
 	res, err := c.CheckAlias(context.Background(), "taken1", "")
 	if err != nil {
 		t.Fatal(err)

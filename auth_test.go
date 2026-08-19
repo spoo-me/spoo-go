@@ -27,7 +27,7 @@ func TestExchangeDeviceCode(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, nil)
+	c := NewClient(WithBaseURL(srv.URL))
 	tok, err := c.ExchangeDeviceCode(context.Background(), "onetimecode", "theverifier")
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +43,7 @@ func TestMe(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, nil)
+	c := NewClient(WithBaseURL(srv.URL))
 	u, err := c.Me(context.Background())
 	if err != nil {
 		t.Fatal(err)

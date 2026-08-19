@@ -25,7 +25,7 @@ func TestListURLsBuildsQueryAndFilter(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, nil)
+	c := NewClient(WithBaseURL(srv.URL))
 	page, err := c.ListURLs(context.Background(), ListURLsOptions{
 		Page: 2, PageSize: 50, SortBy: "total_clicks", Search: "launch", Status: "ACTIVE",
 	})
@@ -45,7 +45,7 @@ func TestResolveAliasUsesAPIHostAndEscapes(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, nil)
+	c := NewClient(WithBaseURL(srv.URL))
 	u, err := c.ResolveAlias(context.Background(), "🚀", "")
 	if err != nil {
 		t.Fatal(err)
@@ -67,7 +67,7 @@ func TestResolveAliasNotFound(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, nil)
+	c := NewClient(WithBaseURL(srv.URL))
 	_, err := c.ResolveAlias(context.Background(), "nope", "")
 	if !IsNotFound(err) {
 		t.Fatalf("err = %v, want IsNotFound", err)
@@ -84,7 +84,7 @@ func TestResolveAliasCustomDomain(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, nil)
+	c := NewClient(WithBaseURL(srv.URL))
 	if _, err := c.ResolveAlias(context.Background(), "promo", "links.example.com"); err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestUpdateURLSendsPatch(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, nil)
+	c := NewClient(WithBaseURL(srv.URL))
 	res, err := c.UpdateURL(context.Background(), "abc123", map[string]any{"status": "INACTIVE"})
 	if err != nil {
 		t.Fatal(err)
@@ -126,7 +126,7 @@ func TestDeleteURL(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, nil)
+	c := NewClient(WithBaseURL(srv.URL))
 	if err := c.DeleteURL(context.Background(), "abc123"); err != nil {
 		t.Fatal(err)
 	}

@@ -28,7 +28,7 @@ func TestStatsQueryAndDecode(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, nil)
+	c := NewClient(WithBaseURL(srv.URL))
 	res, err := c.Stats(context.Background(), StatsQuery{
 		GroupBy: []string{"time", "browser"}, Timezone: "UTC",
 	})
@@ -63,7 +63,7 @@ func TestLinkStatsHitsPerLinkPath(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, nil)
+	c := NewClient(WithBaseURL(srv.URL))
 	res, err := c.LinkStats(context.Background(), "65f0abc123", StatsQuery{GroupBy: []string{"time"}})
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +97,7 @@ func TestPublicStatsUnwrapsEnvelope(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, nil)
+	c := NewClient(WithBaseURL(srv.URL))
 	res, err := c.PublicStats(context.Background(), "launch", "2026-01-01T00:00:00Z", "", "UTC")
 	if err != nil {
 		t.Fatal(err)
@@ -120,7 +120,7 @@ func TestExportReturnsFilenameAndBytes(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, nil)
+	c := NewClient(WithBaseURL(srv.URL))
 	name, data, err := c.Export(context.Background(), StatsQuery{}, "xlsx")
 	if err != nil {
 		t.Fatal(err)
@@ -140,7 +140,7 @@ func TestExportLinkHitsPerLinkPath(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, nil)
+	c := NewClient(WithBaseURL(srv.URL))
 	name, data, err := c.ExportLink(context.Background(), "65f0abc123", StatsQuery{}, "csv")
 	if err != nil {
 		t.Fatal(err)

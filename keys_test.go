@@ -13,7 +13,7 @@ func TestListKeys(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, nil)
+	c := NewClient(WithBaseURL(srv.URL))
 	keys, err := c.ListKeys(context.Background())
 	if err != nil {
 		t.Fatal(err)

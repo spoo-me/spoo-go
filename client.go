@@ -9,71 +9,73 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"regexp"
-	"strings"
+	"sync"
 	"time"
 )
 
-// Version is the SDK release.
-var Version = "dev"
+// DefaultBaseURL is the hosted spoo.me API; see [WithBaseURL] for
+// self-hosted deployments.
+const DefaultBaseURL = "https://spoo.me"
 
-var versionRe = regexp.MustCompile(`^[A-Za-z0-9._-]{1,16}$`)
+const defaultMaxRetries = 2
 
-// clientHeader identifies the SDK (and its version, when well-formed) to
-// the backend so API traffic can be attributed per client.
-func clientHeader() string {
-	if versionRe.MatchString(Version) {
-		return "sdk-go/" + Version
-	}
-	return "sdk-go"
-}
-
+// Client is a spoo.me API client. Construct it with [NewClient]; the
+// zero value is not usable. A Client is safe for concurrent use.
 type Client struct {
-	base   string
-	http   *http.Client
-	tokens TokenSource
+	base       string
+	http       *http.Client
+	tokens     TokenSource
+	maxRetries int
+	clientTag  string
+
+	// retryBase is the exponential-backoff unit, shrunk in tests.
+	retryBase time.Duration
+
+	// refreshMu single-flights token refresh: under concurrent 401s
+	// only one goroutine may spend the rotating refresh token — a
+	// second spender would persist a dead pair.
+	refreshMu sync.Mutex
 }
 
-func New(base string, tokens TokenSource) *Client {
-	return &Client{
-		base: strings.TrimRight(base, "/"),
-		http: &http.Client{
-			Timeout: 30 * time.Second,
-			// Go forwards custom headers on redirects, including
-			// cross-origin ones. Attribution belongs to the spoo API
-			// only, so drop it whenever a redirect leaves the original
-			// host. Go itself strips Authorization on cross-domain hops.
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				if req.URL.Host != via[0].URL.Host {
-					req.Header.Del("X-Spoo-Client")
-				}
-				return nil
-			},
-		},
-		tokens: tokens,
+// NewClient returns a Client for the hosted spoo.me API, anonymous
+// unless an auth option is given. See [Option] for configuration.
+func NewClient(opts ...Option) *Client {
+	c := &Client{
+		base:       DefaultBaseURL,
+		maxRetries: defaultMaxRetries,
+		retryBase:  retryBaseDelay,
 	}
-}
-
-// APIError mirrors the backend's error envelope {error, code, detail}.
-type APIError struct {
-	Status  int    `json:"-"`
-	Code    string `json:"code"`
-	Message string `json:"error"`
-	Detail  string `json:"detail"`
-}
-
-func (e *APIError) Error() string {
-	if e.Detail != "" {
-		return fmt.Sprintf("%s (%s)", e.Message, e.Detail)
+	for _, opt := range opts {
+		opt(c)
 	}
-	return e.Message
+	if c.clientTag == "" {
+		c.clientTag = defaultClientTag()
+	}
+	if c.http == nil {
+		c.http = &http.Client{Timeout: 30 * time.Second}
+	}
+	c.http = withRedirectHeaderStrip(c.http)
+	return c
 }
 
-// IsNotFound reports whether err is an API 404 — for the resolve-first
-// endpoints that means "no such link, or not yours".
-func IsNotFound(err error) bool {
-	var apiErr *APIError
-	return errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound
+// withRedirectHeaderStrip copies hc and extends its redirect policy: Go
+// forwards custom headers on redirects, including cross-origin ones.
+// Attribution belongs to the spoo API only, so X-Spoo-Client is dropped
+// whenever a redirect leaves the original host. Go itself strips
+// Authorization on cross-domain hops.
+func withRedirectHeaderStrip(hc *http.Client) *http.Client {
+	cp := *hc
+	next := hc.CheckRedirect
+	cp.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if req.URL.Host != via[0].URL.Host {
+			req.Header.Del("X-Spoo-Client")
+		}
+		if next != nil {
+			return next(req, via)
+		}
+		return nil
+	}
+	return &cp
 }
 
 // credentials returns the current credentials, or the anonymous zero
@@ -108,12 +110,12 @@ func (c *Client) request(ctx context.Context, method, path string, query url.Val
 	if resp.StatusCode == http.StatusUnauthorized {
 		// The public stats endpoint answers 401 for password-protected
 		// links. That is a property of the link, not of the session, so
-		// refreshing tokens can't help — and the SDK doesn't supply link
-		// passwords, so say so instead of blaming the login.
+		// refreshing tokens can't help — newError attaches
+		// ErrLinkPasswordProtected instead of blaming the login.
 		switch resp.Header.Get("X-Error-Code") {
 		case "password_required", "invalid_password":
-			resp.Body.Close()
-			return nil, errors.New("this link's stats are password protected")
+			defer resp.Body.Close()
+			return nil, newError(resp)
 		}
 		if creds.RefreshToken != "" {
 			resp.Body.Close()
@@ -128,26 +130,54 @@ func (c *Client) request(ctx context.Context, method, path string, query url.Val
 	return resp, nil
 }
 
+// send builds and performs one HTTP call, retrying transient failures
+// (connection errors, 408, 429, 5xx) with exponential backoff and
+// jitter, honoring Retry-After. Callers own the response body.
 func (c *Client) send(ctx context.Context, method, path string, query url.Values, body any, creds Credentials) (*http.Response, error) {
 	u := c.base + path
 	if len(query) > 0 {
 		u += "?" + query.Encode()
 	}
-	var rdr io.Reader
+	var payload []byte
 	if body != nil {
 		data, err := json.Marshal(body)
 		if err != nil {
 			return nil, err
 		}
-		rdr = bytes.NewReader(data)
+		payload = data
+	}
+	for attempt := 0; ; attempt++ {
+		resp, err := c.sendOnce(ctx, method, u, payload, creds)
+		if err != nil {
+			if attempt >= c.maxRetries || ctx.Err() != nil {
+				return nil, err
+			}
+		} else if !retryableStatus(resp.StatusCode) || attempt >= c.maxRetries {
+			return resp, nil
+		}
+		var retryAfter string
+		if resp != nil {
+			retryAfter = resp.Header.Get("Retry-After")
+			drain(resp)
+		}
+		if err := sleep(ctx, c.retryDelay(attempt, retryAfter)); err != nil {
+			return nil, err
+		}
+	}
+}
+
+func (c *Client) sendOnce(ctx context.Context, method, u string, payload []byte, creds Credentials) (*http.Response, error) {
+	var rdr io.Reader
+	if payload != nil {
+		rdr = bytes.NewReader(payload)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, u, rdr)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "spoo-go")
-	req.Header.Set("X-Spoo-Client", clientHeader())
-	if body != nil {
+	req.Header.Set("X-Spoo-Client", c.clientTag)
+	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	if bearer := creds.bearer(); bearer != "" {
@@ -157,25 +187,41 @@ func (c *Client) send(ctx context.Context, method, path string, query url.Values
 }
 
 // refreshCredentials exchanges the refresh token for a new pair and
-// persists it. The backend rotates refresh tokens, so the stored pair
-// must be replaced.
-func (c *Client) refreshCredentials(ctx context.Context, creds Credentials) (Credentials, error) {
-	resp, err := c.send(ctx, http.MethodPost, "/auth/device/refresh", nil,
-		map[string]string{"refresh_token": creds.RefreshToken}, Credentials{})
+// persists it via TokenSource.Update. The backend rotates refresh
+// tokens, so the stored pair must be replaced — and only one goroutine
+// may perform the exchange (see refreshMu).
+func (c *Client) refreshCredentials(ctx context.Context, stale Credentials) (Credentials, error) {
+	c.refreshMu.Lock()
+	defer c.refreshMu.Unlock()
+
+	// Another goroutine may have refreshed while we waited on the
+	// lock; if the source already holds a different access token, use
+	// it instead of spending the (now rotated-dead) refresh token.
+	current, err := c.credentials(ctx)
 	if err != nil {
 		return Credentials{}, err
 	}
-	defer resp.Body.Close()
-	var out struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
+	if current.AccessToken != stale.AccessToken {
+		return current, nil
 	}
-	if err := decode(resp, &out); err != nil {
-		return Credentials{}, fmt.Errorf("session expired: %w", err)
+
+	pair, err := c.deviceRefresh(ctx, "", current.RefreshToken)
+	if err != nil {
+		// A definitive rejection of the refresh token means the
+		// session is gone; transient failures (5xx, 429, network) are
+		// not a verdict on the session.
+		var apiErr *Error
+		if errors.As(err, &apiErr) && apiErr.sentinel == nil {
+			switch apiErr.StatusCode {
+			case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden:
+				apiErr.sentinel = ErrSessionExpired
+			}
+		}
+		return Credentials{}, fmt.Errorf("refreshing session: %w", err)
 	}
-	updated := creds
-	updated.AccessToken = out.AccessToken
-	updated.RefreshToken = out.RefreshToken
+	updated := current
+	updated.AccessToken = pair.AccessToken
+	updated.RefreshToken = pair.RefreshToken
 	if c.tokens != nil {
 		if err := c.tokens.Update(ctx, updated); err != nil {
 			return Credentials{}, err
@@ -186,10 +232,7 @@ func (c *Client) refreshCredentials(ctx context.Context, creds Credentials) (Cre
 
 func decode(resp *http.Response, out any) error {
 	if resp.StatusCode >= 400 {
-		apiErr := &APIError{Status: resp.StatusCode, Message: resp.Status}
-		data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		_ = json.Unmarshal(data, apiErr)
-		return apiErr
+		return newError(resp)
 	}
 	if out == nil {
 		return nil
