@@ -20,8 +20,10 @@ type StatsQuery struct {
 	Timezone  string   // IANA name
 	// Filters narrows results server-side; keys are the filterable
 	// dimensions (browser, os, device, country, city, referrer, the
-	// utm_* trio) plus the slicing filters short_code and url_id,
-	// which restrict the account aggregate to specific owned links.
+	// utm_* trio) plus the slicing filters short_code, url_id, tag
+	// (tag names) and tag_id, which restrict the account aggregate to
+	// specific owned links. A tag filter covers the whole click history
+	// of the links carrying it, not just clicks since it was applied.
 	Filters map[string][]string
 }
 
@@ -109,12 +111,12 @@ func (r *StatsResponse) Points(dimension, metric string) []MetricPoint {
 }
 
 // errPerLinkSlicing rejects aggregate-only filters on per-link calls.
-var errPerLinkSlicing = errors.New("spoo: the short_code and url_id filters are aggregate-only; the per-link endpoints already carry the link identity")
+var errPerLinkSlicing = errors.New("spoo: the short_code, url_id, tag and tag_id filters are aggregate-only; the per-link endpoints already carry the link identity")
 
-// validatePerLink rejects the slicing filters the per-link endpoints
-// answer 422 to, before any request goes out.
+// validatePerLink rejects the aggregate-only slicing filters before any
+// request goes out: the per-link routes do not accept them.
 func (q StatsQuery) validatePerLink() error {
-	for _, key := range []string{"short_code", "url_id"} {
+	for _, key := range []string{"short_code", "url_id", "tag", "tag_id"} {
 		if len(q.Filters[key]) > 0 {
 			return errPerLinkSlicing
 		}
@@ -124,7 +126,8 @@ func (q StatsQuery) validatePerLink() error {
 
 // Stats aggregates clicks across every link the account owns.
 // Auth is required — anonymous stats live on PublicStats. The
-// short_code / url_id slicing filters apply here (and on Export) only.
+// short_code / url_id / tag / tag_id slicing filters apply here (and
+// on Export) only.
 func (c *Client) Stats(ctx context.Context, q StatsQuery) (*StatsResponse, error) {
 	var out StatsResponse
 	if err := c.do(ctx, http.MethodGet, "/api/v1/stats", q.values(), nil, &out); err != nil {
@@ -135,9 +138,9 @@ func (c *Client) Stats(ctx context.Context, q StatsQuery) (*StatsResponse, error
 
 // LinkStats returns stats for one owned link by its url id (resolve an
 // alias with ResolveAlias first, or use StatsByAlias). Unknown and
-// foreign ids both 404. The short_code / url_id slicing filters are
-// rejected client-side: the endpoint 422s on them because the path
-// already picks the link.
+// foreign ids both 404. The short_code / url_id / tag / tag_id slicing
+// filters are not accepted on the per-link routes (the path already
+// picks the link) and are rejected client-side.
 func (c *Client) LinkStats(ctx context.Context, urlID string, q StatsQuery) (*StatsResponse, error) {
 	if err := q.validatePerLink(); err != nil {
 		return nil, err

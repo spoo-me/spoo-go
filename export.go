@@ -27,9 +27,10 @@ type ExportFile struct {
 
 // Export downloads account-wide stats in the given format (json, csv,
 // xlsx, xml). Auth is required — anonymous export no longer exists.
-// Slice to specific links with the short_code / url_id filters on
-// [StatsQuery]; note the aggregate route reports a generic filename
-// regardless of slicing, so single-link exports belong on ExportLink.
+// Slice to specific links with the short_code / url_id / tag / tag_id
+// filters on [StatsQuery]; note the aggregate route reports a generic
+// filename regardless of slicing, so single-link exports belong on
+// ExportLink.
 func (c *Client) Export(ctx context.Context, q StatsQuery, format string) (*ExportFile, error) {
 	return c.export(ctx, "/api/v1/export", q.values(), format)
 }
@@ -39,7 +40,8 @@ func (c *Client) Export(ctx context.Context, q StatsQuery, format string) (*Expo
 // identity (the aggregate route names every download the same, so
 // saved files would silently overwrite each other). Resolve an alias
 // with ResolveAlias first; unknown and foreign ids both 404. The
-// short_code / url_id slicing filters are aggregate-only here too.
+// short_code / url_id / tag / tag_id slicing filters are not accepted on
+// the per-link routes and are rejected client-side here too.
 func (c *Client) ExportLink(ctx context.Context, urlID string, q StatsQuery, format string) (*ExportFile, error) {
 	if err := q.validatePerLink(); err != nil {
 		return nil, err

@@ -75,3 +75,33 @@ func TestCheckAlias(t *testing.T) {
 		t.Fatalf("unexpected: %+v", res)
 	}
 }
+
+func TestShortenTagIDs(t *testing.T) {
+	var bodies []map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		json.NewDecoder(r.Body).Decode(&req)
+		bodies = append(bodies, req)
+		w.WriteHeader(http.StatusCreated)
+		w.Write([]byte(`{"id":"x","short_url":"https://spoo.me/launch","alias":"launch","long_url":"https://example.com","status":"ACTIVE","tags":[{"id":"t1","name":"launch","color":"violet","icon":"rocket"}]}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(option.WithBaseURL(srv.URL))
+	res, err := c.Shorten(context.Background(), ShortenRequest{LongURL: "https://example.com", TagIDs: []string{"t1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Shorten(context.Background(), ShortenRequest{LongURL: "https://example.com"}); err != nil {
+		t.Fatal(err)
+	}
+	if ids, ok := bodies[0]["tag_ids"].([]any); !ok || len(ids) != 1 || ids[0] != "t1" {
+		t.Fatalf("tag_ids = %v", bodies[0]["tag_ids"])
+	}
+	if _, ok := bodies[1]["tag_ids"]; ok {
+		t.Fatalf("tag_ids must be omitted when empty: %v", bodies[1])
+	}
+	if len(res.Tags) != 1 || res.Tags[0].Name != "launch" || res.Tags[0].Color != "violet" {
+		t.Fatalf("tags = %+v", res.Tags)
+	}
+}

@@ -79,6 +79,27 @@ func (c *Client) BulkMoveDomain(ctx context.Context, ids []string, domain string
 	return c.bulk(ctx, "/api/v1/urls/bulk/domain", body)
 }
 
+// BulkTagChange names the tag ids to add to and remove from every link
+// in a [Client.BulkUpdateTags] call. At least one side must name a tag,
+// and no tag may appear on both.
+type BulkTagChange struct {
+	Add    []string `json:"add,omitempty"`
+	Remove []string `json:"remove,omitempty"`
+}
+
+// BulkUpdateTags adds and removes tags, by tag id, on up to 100 owned
+// links by url id. Each link ends up with its current tags minus Remove
+// plus Add (kept once, order preserved). An unknown id in Add rejects
+// the whole request; a link that would exceed 10 tags fails per-item
+// with validation_error.
+func (c *Client) BulkUpdateTags(ctx context.Context, ids []string, change BulkTagChange) (*BulkResult, error) {
+	body := struct {
+		IDs []string `json:"ids"`
+		BulkTagChange
+	}{IDs: ids, BulkTagChange: change}
+	return c.bulk(ctx, "/api/v1/urls/bulk/tags", body)
+}
+
 func (c *Client) bulk(ctx context.Context, path string, body any) (*BulkResult, error) {
 	var out BulkResult
 	if err := c.do(ctx, http.MethodPost, path, nil, body, &out); err != nil {

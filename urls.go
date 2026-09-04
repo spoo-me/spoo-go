@@ -36,6 +36,7 @@ type URLItem struct {
 	PrivateStats bool      `json:"private_stats"`
 	BlockBots    bool      `json:"block_bots"`
 	Domain       string    `json:"domain"`
+	Tags         []TagRef  `json:"tags"`
 }
 
 // URLPage is one page of the account's links. HasNext reports whether
@@ -68,6 +69,12 @@ type ListURLsOptions struct {
 	// property, Set(false) only links without it.
 	PasswordSet  Opt[bool]
 	MaxClicksSet Opt[bool]
+	// TagIDs and TagNames keep only links carrying the listed tags
+	// (unknown names match nothing). TagsMatch decides how several
+	// tags combine: "any" (the server default) or "all".
+	TagIDs    []string
+	TagNames  []string
+	TagsMatch string
 }
 
 // ListURLs returns one page of the account's links; ListURLsAll
@@ -107,6 +114,15 @@ func (c *Client) ListURLs(ctx context.Context, opts ListURLsOptions) (*URLPage, 
 	}
 	if v, ok := opts.MaxClicksSet.Value(); ok {
 		filter["maxClicksSet"] = v
+	}
+	if len(opts.TagIDs) > 0 {
+		filter["tagIds"] = opts.TagIDs
+	}
+	if len(opts.TagNames) > 0 {
+		filter["tagNames"] = opts.TagNames
+	}
+	if opts.TagsMatch != "" {
+		filter["tagsMatch"] = opts.TagsMatch
 	}
 	if len(filter) > 0 {
 		data, err := json.Marshal(filter)
@@ -215,15 +231,18 @@ type UpdatedURL struct {
 	BlockBots    bool      `json:"block_bots"`
 	PrivateStats bool      `json:"private_stats"`
 	Domain       string    `json:"domain"`
+	Tags         []TagRef  `json:"tags"`
 	UpdatedAt    Timestamp `json:"updated_at"`
 }
 
 // UpdateURLParams patches a link. Plain fields are sent only when
 // non-zero. The [Opt] fields carry the API's tri-state semantics:
 // omitted keeps the current setting, [Null] clears it (remove password,
-// remove click limit, remove expiry, move back to the default domain),
-// [Set] replaces it. BlockBots and PrivateStats use Opt so that
-// Set(false) is expressible; null keeps the existing setting there.
+// remove click limit, remove expiry, move back to the default domain,
+// remove every tag), [Set] replaces it. BlockBots and PrivateStats use
+// Opt so that Set(false) is expressible; null keeps the existing
+// setting there. TagIDs replaces the whole list: Set([]string{}), Set
+// of a nil slice and Null all clear it.
 type UpdateURLParams struct {
 	LongURL      string         `json:"long_url,omitzero"`
 	Alias        string         `json:"alias,omitzero"`
@@ -234,6 +253,7 @@ type UpdateURLParams struct {
 	Domain       Opt[string]    `json:"domain,omitzero"`
 	BlockBots    Opt[bool]      `json:"block_bots,omitzero"`
 	PrivateStats Opt[bool]      `json:"private_stats,omitzero"`
+	TagIDs       Opt[[]string]  `json:"tag_ids,omitzero"`
 }
 
 // UpdateURL patches one owned link by its url id. See
