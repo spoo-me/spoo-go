@@ -297,8 +297,8 @@ func TestExportLinkHitsPerLinkRoute(t *testing.T) {
 	}
 }
 
-// The per-link endpoints 422 on the aggregate slicing filters, so the
-// SDK rejects them before any request goes out.
+// The per-link endpoints do not accept the aggregate slicing filters,
+// so the SDK rejects them before any request goes out.
 func TestPerLinkCallsRejectSlicingFilters(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		t.Error("no request must be sent with aggregate-only filters")
@@ -328,5 +328,59 @@ func TestExportErrorMapsEnvelope(t *testing.T) {
 	var apiErr *Error
 	if !errors.As(err, &apiErr) || apiErr.Code != "validation_error" {
 		t.Fatalf("err = %v, want the parsed envelope", err)
+	}
+}
+
+// tag and tag_id ride the query like every other filter, comma-joined,
+// on the aggregate stats and export routes.
+func TestStatsTagFilters(t *testing.T) {
+	var queries []map[string][]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		queries = append(queries, r.URL.Query())
+		if r.URL.Path == "/api/v1/export" {
+			w.Write([]byte(`{}`))
+			return
+		}
+		w.Write([]byte(`{"summary":{"total_clicks":5,"unique_clicks":3},"metrics":{}}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(option.WithBaseURL(srv.URL))
+	q := StatsQuery{Filters: map[string][]string{"tag": {"launch", "q3"}, "tag_id": {"t1"}}}
+	res, err := c.Stats(context.Background(), q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Summary.TotalClicks != 5 {
+		t.Fatalf("res = %+v", res)
+	}
+	file, err := c.Export(context.Background(), q, "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	file.Body.Close()
+	for i, got := range queries {
+		if got["tag"] == nil || got["tag"][0] != "launch,q3" || got["tag_id"] == nil || got["tag_id"][0] != "t1" {
+			t.Errorf("request %d query = %v", i, got)
+		}
+	}
+}
+
+// The per-link routes take no tag filters: the path already picks the
+// link, so they are rejected client-side with the other slicing filters.
+func TestPerLinkCallsRejectTagFilters(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Error("no request must be sent with aggregate-only filters")
+	}))
+	defer srv.Close()
+
+	c := NewClient(option.WithBaseURL(srv.URL))
+	byName := StatsQuery{Filters: map[string][]string{"tag": {"launch"}}}
+	if _, err := c.LinkStats(context.Background(), "65f0abc123", byName); err == nil {
+		t.Fatal("LinkStats must reject tag filters")
+	}
+	byID := StatsQuery{Filters: map[string][]string{"tag_id": {"t1"}}}
+	if _, err := c.ExportLink(context.Background(), "65f0abc123", byID, "json"); err == nil {
+		t.Fatal("ExportLink must reject tag_id filters")
 	}
 }

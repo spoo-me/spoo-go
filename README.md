@@ -115,7 +115,56 @@ for _, row := range res.Results {
 }
 ```
 
-`BulkDelete`, `BulkUpdateExpiry`, and `BulkMoveDomain` follow the same shape.
+`BulkDelete`, `BulkUpdateExpiry`, `BulkMoveDomain`, and `BulkUpdateTags` follow
+the same shape.
+
+## Tags
+
+Tags are account-wide labels with a color and an icon. A link carries up to
+ten of them, by id:
+
+```go
+tag, err := client.CreateTag(ctx, spoo.CreateTagParams{Name: "launch", Color: "violet"})
+
+link, err := client.Shorten(ctx, spoo.ShortenRequest{
+    LongURL: "https://example.com/launch",
+    TagIDs:  []string{tag.ID},
+})
+
+// on update the list replaces the stored one; spoo.Null clears it
+_, err = client.UpdateURL(ctx, link.ID, spoo.UpdateURLParams{
+    TagIDs: spoo.Set([]string{tag.ID}),
+})
+```
+
+Filter the link list by tag id or name, and pick whether a link needs any or
+all of them:
+
+```go
+page, err := client.ListURLs(ctx, spoo.ListURLsOptions{
+    TagNames:  []string{"launch", "q3"},
+    TagsMatch: "all",
+})
+```
+
+Tag or untag up to 100 links at once; the result has the same per-item shape
+as the other bulk operations:
+
+```go
+res, err := client.BulkUpdateTags(ctx, ids, spoo.BulkTagChange{Add: []string{tag.ID}})
+```
+
+Stats and exports take `tag` (names) and `tag_id` filters on the aggregate
+routes, covering the whole click history of the tagged links:
+
+```go
+stats, err := client.Stats(ctx, spoo.StatsQuery{
+    Filters: map[string][]string{"tag": {"launch"}},
+})
+```
+
+`ListTags`, `UpdateTag`, and `DeleteTag` round out the set. Deleting a tag
+removes it from every link and reports how many were touched.
 
 ## Stats and exports
 
@@ -243,8 +292,9 @@ file, or database, and rotated tokens persist through it.
 ## Scope
 
 The SDK covers the v1 data plane end to end: shortening, link management,
-claiming, bulk operations, stats, exports, public stats and previews, the
-emoji alias policy, identity (`Me`), and the Sign in with Spoo device flow.
+claiming, tags, bulk operations, stats, exports, public stats and previews,
+the emoji alias policy, identity (`Me`), and the Sign in with Spoo device
+flow.
 Deliberately out of scope: API key management, health checks, the contact
 endpoint, profile management, and all legacy v0 routes. Anything the API
 grows before the SDK does is reachable through the raw request methods
@@ -260,7 +310,9 @@ below.
 | `UpdateURL`, `SetURLStatus` | `PATCH /api/v1/urls/{id}`, `PATCH /api/v1/urls/{id}/status` |
 | `DeleteURL`, `DeleteURLsByDomain` | `DELETE /api/v1/urls/{id}`, `DELETE /api/v1/urls?domain=` |
 | `ClaimURLs` | `POST /api/v1/urls/claim` |
-| `BulkDelete`, `BulkUpdateStatus`, `BulkUpdateExpiry`, `BulkMoveDomain` | `POST /api/v1/urls/bulk/*` |
+| `BulkDelete`, `BulkUpdateStatus`, `BulkUpdateExpiry`, `BulkMoveDomain`, `BulkUpdateTags` | `POST /api/v1/urls/bulk/*` |
+| `ListTags`, `CreateTag` | `GET /api/v1/tags`, `POST /api/v1/tags` |
+| `UpdateTag`, `DeleteTag` | `PATCH /api/v1/tags/{id}`, `DELETE /api/v1/tags/{id}` |
 | `Stats`, `LinkStats`, `StatsByAlias` | `GET /api/v1/stats`, `GET /api/v1/stats/links/{id}` |
 | `PublicStats`, `PublicPreview` | `GET or POST /api/v1/public/stats/{code}`, `GET /api/v1/public/preview/{code}` |
 | `Export`, `ExportLink` | `GET /api/v1/export`, `GET /api/v1/export/links/{id}` |

@@ -414,3 +414,108 @@ func TestDeleteURL(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Tag filters ride the same filter JSON as the other list filters, as
+// arrays under the camelCase wire names.
+func TestListURLsTagFilter(t *testing.T) {
+	var filters []map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var filter map[string]any
+		if raw := r.URL.Query().Get("filter"); raw != "" {
+			if err := json.Unmarshal([]byte(raw), &filter); err != nil {
+				t.Errorf("filter not JSON: %v", err)
+			}
+		}
+		filters = append(filters, filter)
+		w.Write([]byte(`{"items":[{"id":"a","alias":"launch","password_set":false,"tags":[{"id":"t1","name":"launch","color":"violet","icon":"rocket"},{"id":"t2","name":"q3","color":"teal","icon":"tag"}]}],"page":1,"hasNext":false}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(option.WithBaseURL(srv.URL))
+	page, err := c.ListURLs(context.Background(), ListURLsOptions{
+		TagIDs:    []string{"t1", "t2"},
+		TagNames:  []string{"launch"},
+		TagsMatch: "all",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.ListURLs(context.Background(), ListURLsOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	got := filters[0]
+	if ids, ok := got["tagIds"].([]any); !ok || len(ids) != 2 || ids[0] != "t1" || ids[1] != "t2" {
+		t.Errorf("tagIds = %v", got["tagIds"])
+	}
+	if names, ok := got["tagNames"].([]any); !ok || len(names) != 1 || names[0] != "launch" {
+		t.Errorf("tagNames = %v", got["tagNames"])
+	}
+	if got["tagsMatch"] != "all" {
+		t.Errorf("tagsMatch = %v", got["tagsMatch"])
+	}
+	if filters[1] != nil {
+		t.Errorf("no filter must be sent when every tag option is empty: %v", filters[1])
+	}
+	tags := page.Items[0].Tags
+	if len(tags) != 2 || tags[0].ID != "t1" || tags[1].Name != "q3" || tags[1].Icon != "tag" {
+		t.Fatalf("tags = %+v", tags)
+	}
+}
+
+func TestGetURLDecodesTags(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(`{"id":"65f0abc123","alias":"launch","password_set":false,"tags":[{"id":"t1","name":"launch","color":"violet","icon":"rocket"}]}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(option.WithBaseURL(srv.URL))
+	u, err := c.GetURL(context.Background(), "65f0abc123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(u.Tags) != 1 || u.Tags[0].Name != "launch" {
+		t.Fatalf("tags = %+v", u.Tags)
+	}
+}
+
+// tag_ids replaces the whole list: a value replaces, an empty list or
+// null clears, omitted keeps the current tags.
+func TestUpdateURLTagIDs(t *testing.T) {
+	var bodies []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data, _ := io.ReadAll(r.Body)
+		bodies = append(bodies, string(data))
+		w.Write([]byte(`{"id":"abc123","password_set":false,"tags":[{"id":"t1","name":"launch","color":"violet","icon":"rocket"}],"updated_at":1781524800}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(option.WithBaseURL(srv.URL))
+	res, err := c.UpdateURL(context.Background(), "abc123", UpdateURLParams{TagIDs: Set([]string{"t1", "t2"})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, params := range []UpdateURLParams{
+		{TagIDs: Set([]string{})},
+		{TagIDs: Null[[]string]()},
+		{Status: "ACTIVE"},
+	} {
+		if _, err := c.UpdateURL(context.Background(), "abc123", params); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if bodies[0] != `{"tag_ids":["t1","t2"]}` {
+		t.Fatalf("replace body = %s", bodies[0])
+	}
+	if bodies[1] != `{"tag_ids":[]}` {
+		t.Fatalf("empty-list body = %s", bodies[1])
+	}
+	if bodies[2] != `{"tag_ids":null}` {
+		t.Fatalf("null body = %s", bodies[2])
+	}
+	if bodies[3] != `{"status":"ACTIVE"}` {
+		t.Fatalf("omitted body = %s", bodies[3])
+	}
+	if len(res.Tags) != 1 || res.Tags[0].ID != "t1" {
+		t.Fatalf("tags = %+v", res.Tags)
+	}
+}

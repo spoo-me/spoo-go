@@ -122,3 +122,36 @@ func TestBulkMoveDomainWire(t *testing.T) {
 		t.Fatalf("clear body = %s", bodies[1])
 	}
 }
+
+// Empty add or remove lists are omitted; the server requires at least
+// one of them to name a tag.
+func TestBulkUpdateTagsBody(t *testing.T) {
+	var bodies []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/urls/bulk/tags" || r.Method != http.MethodPost {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		data, _ := io.ReadAll(r.Body)
+		bodies = append(bodies, string(data))
+		w.Write([]byte(`{"summary":{"total":2,"succeeded":1,"failed":1},"results":[{"id":"a","alias":"x","ok":true},{"id":"b","alias":"y","ok":false,"error_code":"validation_error","error":"too many tags"}]}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(option.WithBaseURL(srv.URL))
+	res, err := c.BulkUpdateTags(context.Background(), []string{"a", "b"}, BulkTagChange{Add: []string{"t1", "t2"}, Remove: []string{"t3"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.BulkUpdateTags(context.Background(), []string{"a", "b"}, BulkTagChange{Remove: []string{"t3"}}); err != nil {
+		t.Fatal(err)
+	}
+	if bodies[0] != `{"ids":["a","b"],"add":["t1","t2"],"remove":["t3"]}` {
+		t.Fatalf("body = %s", bodies[0])
+	}
+	if bodies[1] != `{"ids":["a","b"],"remove":["t3"]}` {
+		t.Fatalf("remove-only body = %s", bodies[1])
+	}
+	if res.Summary.Failed != 1 || res.Results[1].ErrorCode != "validation_error" {
+		t.Fatalf("res = %+v", res)
+	}
+}

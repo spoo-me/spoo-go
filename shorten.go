@@ -18,6 +18,9 @@ type ShortenRequest struct {
 	ExpireAfter  time.Time `json:"expire_after,omitzero"`
 	PrivateStats bool      `json:"private_stats,omitempty"`
 	Domain       string    `json:"domain,omitempty"`
+	// TagIDs are ids from [Client.ListTags], at most 10; every one must
+	// be the caller's own tag (400 otherwise).
+	TagIDs []string `json:"tag_ids,omitempty"`
 }
 
 // ShortURL mirrors UrlResponse (POST /api/v1/shorten).
@@ -31,6 +34,7 @@ type ShortURL struct {
 	OwnerID   string    `json:"owner_id"`
 	CreatedAt Timestamp `json:"created_at"`
 	Status    string    `json:"status"`
+	Tags      []TagRef  `json:"tags"`
 	// ClaimToken is present only on anonymous creations: the one-time
 	// bearer proof of creation. Store it and the link can be claimed
 	// into an account later with [Client.ClaimURLs].
